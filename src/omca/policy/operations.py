@@ -8,7 +8,6 @@ classification *more* restrictive, never grant an allowance on their own.
 
 from __future__ import annotations
 
-import ipaddress
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,6 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import ApplicationConfig
 from ..contracts import ActionCategory, ElementRef, Observation
+from ..netguard import is_private_host, normalize_host, origin_matches, origin_of, url_problem
+
+__all__ = ["is_private_host", "origin_matches", "origin_of"]  # re-exported for the gate and the engine
 
 C = ActionCategory
 
@@ -241,32 +243,6 @@ def matches_terms(name: str, extra: list[str]) -> str | None:
     return None
 
 
-def origin_of(url: str | None) -> str | None:
-    if not url:
-        return None
-    parts = urlsplit(url)
-    if not parts.scheme or not parts.netloc:
-        return None
-    return f"{parts.scheme}://{parts.netloc}".lower()
-
-
-def is_private_host(host: str) -> bool:
-    if host in {"localhost"} or host.endswith(".local") or host.endswith(".internal"):
-        return True
-    try:
-        ip = ipaddress.ip_address(host.strip("[]"))
-    except ValueError:
-        return False
-    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-
-
-def origin_matches(origin: str | None, pattern: str) -> bool:
-    if not origin:
-        return False
-    regex = "^" + re.escape(pattern.lower()).replace(r"\*", "[^/]*") + "$"
-    return re.match(regex, origin.lower()) is not None
-
-
 @dataclass
 class Classification:
     category: ActionCategory
@@ -288,19 +264,35 @@ class PolicyContext:
     task_inputs: list[str] | None = None  # artifact ids the owner attached to the task request
 
 
+def _page_url(ctx: PolicyContext) -> str | None:
+    return ctx.observation.url if ctx.observation else None
+
+
 def _element(ctx: PolicyContext, ref: str) -> ElementRef | None:
     if ctx.observation is None:
         return None
     return next((e for e in ctx.observation.elements if e.ref == ref), None)
 
 
-def classify_element_activation(el: ElementRef, extra_terms: list[str]) -> Classification:
+def _same_document(href: str, page_url: str | None) -> bool:
+    """A link to the current page itself (``#``, ``#section``): usually a script-driven control, not navigation."""
+    if href.startswith("#"):
+        return True
+    if not page_url:
+        return False
+    return href.split("#", 1)[0] == page_url.split("#", 1)[0] and "#" in href
+
+
+def classify_element_activation(el: ElementRef, extra_terms: list[str], page_url: str | None = None) -> Classification:
     role = el.role.lower()
     name = el.name or ""
     term = matches_terms(name, extra_terms)
     label = f"{role} '{name[:80]}'"
     if el.disabled:
         return Classification(C.READ, f"{label} is disabled; activation is a no-op", element=el)
+    if role == "link" and el.href and _same_document(el.href, page_url):
+        return Classification(C.UNKNOWN_MUTATION, f"link {label} stays on this page, so a script decides what it does",
+                              element=el, consequence=f"Activates {label}; effect unknown")
     if role == "link" and el.href and not el.href.lower().startswith("javascript:"):
         if term or CONSEQUENTIAL_PATH.search(urlsplit(el.href).path or ""):
             return Classification(C.CONSEQUENTIAL, f"link {label} looks consequential ('{term or 'path'}')",
@@ -334,18 +326,17 @@ def classify_element_activation(el: ElementRef, extra_terms: list[str]) -> Class
 
 
 def classify_navigation(url: str, ctx: PolicyContext) -> Classification:
+    problem = url_problem(url)
+    if problem:
+        return Classification(C.FORBIDDEN, problem, destination=url)
     parts = urlsplit(url)
-    if parts.scheme not in {"http", "https"}:
-        return Classification(C.FORBIDDEN, f"scheme {parts.scheme or '(none)'} is not allowed", destination=url)
-    host = (parts.hostname or "").lower()
-    if not host:
-        return Classification(C.FORBIDDEN, "URL has no host", destination=url)
+    host = normalize_host(parts.hostname)
     for blocked in ctx.config.search.block_domains:
         if host == blocked or host.endswith("." + blocked):
             return Classification(C.FORBIDDEN, f"domain {host} is blocked", destination=url)
     if is_private_host(host):
         origin = origin_of(url)
-        host_ok = host in {h.lower() for h in ctx.config.search.allowed_private_hosts}
+        host_ok = host in {normalize_host(h) for h in ctx.config.search.allowed_private_hosts}
         if not host_ok and not any(origin_matches(origin, p) for p in (ctx.attachment_private_origins or [])):
             return Classification(C.FORBIDDEN, f"private network host {host} is not an allowed origin", destination=url)
     if CONSEQUENTIAL_PATH.search(parts.path or ""):
@@ -363,15 +354,13 @@ def classify_press(key: str, ctx: PolicyContext) -> Classification:
         return Classification(SAFE_COMBOS[norm], f"safe shortcut {norm}")
     if norm in SUBMIT_KEYS:
         if focused is not None and norm in {"Enter", "NumpadEnter"}:
-            if focused.role == "link" and focused.href:
-                return classify_element_activation(focused, ctx.config.policy.extra_consequential_terms)
-            if focused.role in {"button", "menuitem"}:
-                return classify_element_activation(focused, ctx.config.policy.extra_consequential_terms)
+            if (focused.role == "link" and focused.href) or focused.role in {"button", "menuitem"}:
+                return classify_element_activation(focused, ctx.config.policy.extra_consequential_terms, _page_url(ctx))
         target = f" in {focused.role} '{focused.name[:60]}'" if focused else ""
         return Classification(C.CONSEQUENTIAL, f"key {norm}{target} can submit or commit", element=focused,
                               consequence=f"Presses {norm}{target}; may submit a form or send content")
     if norm in {" ", "Space"} and focused is not None and focused.role in {"button", "link", "menuitem", "checkbox"}:
-        return classify_element_activation(focused, ctx.config.policy.extra_consequential_terms)
+        return classify_element_activation(focused, ctx.config.policy.extra_consequential_terms, _page_url(ctx))
     if norm in {"Backspace", "Delete"} or len(norm) == 1:
         if focused is not None and (focused.editable or focused.role in EDITABLE_ROLES):
             if focused.input_type == "password" or SENSITIVE_INPUT.search(focused.name or ""):
@@ -424,7 +413,7 @@ def _click(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) -> Class
     el = _element(ctx, args.ref)
     if el is None:
         return Classification(C.FORBIDDEN, f"element ref {args.ref} is not in the current observation")
-    c = classify_element_activation(el, ctx.config.policy.extra_consequential_terms)
+    c = classify_element_activation(el, ctx.config.policy.extra_consequential_terms, _page_url(ctx))
     c.destination = c.destination or (ctx.observation.url if ctx.observation else None)
     return c
 
@@ -435,7 +424,7 @@ def _click_point(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) ->
         return Classification(C.UNKNOWN_MUTATION, "no element identified at the click point",
                               destination=ctx.observation.url if ctx.observation else None,
                               consequence="Clicks at a screen coordinate with no identified control")
-    c = classify_element_activation(el, ctx.config.policy.extra_consequential_terms)
+    c = classify_element_activation(el, ctx.config.policy.extra_consequential_terms, _page_url(ctx))
     if c.category == C.NAVIGATION and el.tag == "canvas":
         c.category = C.UNKNOWN_MUTATION
     c.destination = c.destination or (ctx.observation.url if ctx.observation else None)
@@ -486,11 +475,23 @@ def _retrieve(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) -> Cl
 
 
 def _fetch_image(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) -> Classification:
+    """Image GET without the owner's cookies: it cannot act on the owner's accounts."""
     src = args.src  # type: ignore[attr-defined]
     if src.startswith("data:image/"):
         return Classification(C.READ, "inline image data")
     c = classify_navigation(src, ctx)
     if c.category != C.FORBIDDEN:
+        c.category = C.READ
+    return c
+
+
+def _browser_fetch_image(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) -> Classification:
+    """Image GET *with* the session's cookies: a state-changing URL stays a possible mutation."""
+    src = args.src  # type: ignore[attr-defined]
+    if src.startswith("data:image/"):
+        return Classification(C.READ, "inline image data")
+    c = classify_navigation(src, ctx)
+    if c.category == C.NAVIGATION:
         c.category = C.READ
     return c
 
@@ -569,7 +570,7 @@ for _name, _args, _cls, _desc in [
     ("browser.type", TypeArgs, _type, "Type into a text field"),
     ("browser.press", PressArgs, _press, "Press a key or shortcut"),
     ("browser.select", SelectArgs, _select, "Choose an option"),
-    ("browser.fetch_image", FetchImageArgs, _fetch_image, "Fetch an original page image with session cookies"),
+    ("browser.fetch_image", FetchImageArgs, _browser_fetch_image, "Fetch an original page image with session cookies"),
     ("browser.download", DownloadArgs, _static(C.READ, "download into the task workspace"), "Download a file"),
     ("browser.video_frames", VideoFramesArgs, _static(C.READ, "capture frames of authorized playback"),
      "Seek a page video and capture decoded frames"),

@@ -19,6 +19,7 @@ import httpx
 
 from ..config import ApplicationConfig
 from ..contracts import RetrievedPage, SearchResult
+from ..netguard import BlockedDestination, UrlGuard
 from ..secrets import resolve
 from ..util import now_iso, sha256_text
 
@@ -263,25 +264,53 @@ class SearxngAdapter:
         return out
 
 
+MAX_REDIRECTS = 5
+
+
+def guard_for(config: ApplicationConfig) -> UrlGuard:
+    sc = config.search
+    return UrlGuard(allowed_hosts=sc.allowed_private_hosts, block_domains=sc.block_domains)
+
+
+async def guarded_get(client: httpx.AsyncClient, url: str, guard: UrlGuard | None, *, headers: dict[str, str],
+                      timeout: float) -> httpx.Response:
+    """GET that checks the destination of the request and of every redirect hop before connecting."""
+    for _ in range(MAX_REDIRECTS + 1):
+        if guard is not None:
+            try:
+                await guard.check(url)
+            except BlockedDestination as exc:
+                raise SearchError(f"refused {url[:120]}: {exc}") from exc
+        try:
+            resp = await client.get(url, headers=headers, timeout=timeout, follow_redirects=False)
+        except httpx.HTTPError as exc:
+            raise SearchError(f"fetch failed: {type(exc).__name__}") from exc
+        location = resp.headers.get("location")
+        if resp.is_redirect and location:
+            url = urljoin(str(resp.url), location)
+            continue
+        return resp
+    raise SearchError(f"more than {MAX_REDIRECTS} redirects")
+
+
 class HttpRetrievalAdapter:
     """Plain HTTP GET with stdlib HTML extraction (no supplier AI, no cookies)."""
 
     name = "http"
 
     def __init__(self, user_agent: str, timeout: float = 30, max_bytes: int = 5_000_000,
-                 client: httpx.AsyncClient | None = None):
+                 client: httpx.AsyncClient | None = None, guard: UrlGuard | None = None):
         self.ua = user_agent
         self.timeout = timeout
         self.max_bytes = max_bytes
         self.client = client
+        self.guard = guard
 
     async def retrieve(self, url: str, formats: list[str]) -> RetrievedPage:
-        client = self.client or httpx.AsyncClient(timeout=self.timeout, follow_redirects=True)
+        client = self.client or httpx.AsyncClient(timeout=self.timeout)
         try:
-            resp = await client.get(url, headers={"User-Agent": self.ua, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"},
-                                    timeout=self.timeout, follow_redirects=True)
-        except httpx.HTTPError as exc:
-            raise SearchError(f"fetch failed: {type(exc).__name__}") from exc
+            resp = await guarded_get(client, url, self.guard, timeout=self.timeout,
+                                     headers={"User-Agent": self.ua, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"})
         finally:
             if self.client is None:
                 await client.aclose()
@@ -340,7 +369,8 @@ class SearchService:
                 raise SearchError("search.searxng.base_url is not configured")
             return SearxngAdapter(sc.searxng.base_url, sc.searxng.timeout_seconds, client)
         if name == "http":
-            return HttpRetrievalAdapter(sc.http.user_agent, sc.http.timeout_seconds, sc.http.max_bytes, client)
+            return HttpRetrievalAdapter(sc.http.user_agent, sc.http.timeout_seconds, sc.http.max_bytes, client,
+                                        guard=guard_for(config))
         raise SearchError(f"unknown search adapter {name}")
 
     @classmethod
@@ -385,18 +415,16 @@ class SearchService:
 
 
 async def fetch_image(url: str, user_agent: str, max_bytes: int = 15_000_000,
-                      client: httpx.AsyncClient | None = None) -> tuple[bytes, str]:
+                      client: httpx.AsyncClient | None = None, guard: UrlGuard | None = None) -> tuple[bytes, str]:
     """GET a public image (no cookies). Returns bytes and media type."""
     if url.startswith("data:image/"):
         import base64
 
         header, b64 = url.split(",", 1)
         return base64.b64decode(b64), header[5:].split(";")[0]
-    c = client or httpx.AsyncClient(timeout=30, follow_redirects=True)
+    c = client or httpx.AsyncClient(timeout=30)
     try:
-        resp = await c.get(url, headers={"User-Agent": user_agent, "Accept": "image/*"}, follow_redirects=True)
-    except httpx.HTTPError as exc:
-        raise SearchError(f"image fetch failed: {type(exc).__name__}") from exc
+        resp = await guarded_get(c, url, guard, headers={"User-Agent": user_agent, "Accept": "image/*"}, timeout=30)
     finally:
         if client is None:
             await c.aclose()

@@ -374,10 +374,10 @@ class Coordinator:
                 raise ActionFailure(ErrorCode.SITE_UNAVAILABLE, f"retrieval failed: {exc}"[:300], retryable=False) from exc
             return {"page": page.model_dump()}
         if operation == "web.fetch_image":
-            from .research.search import fetch_image
+            from .research.search import fetch_image, guard_for
 
             try:
-                data, media = await fetch_image(args["src"], self.config.search.http.user_agent)
+                data, media = await fetch_image(args["src"], self.config.search.http.user_agent, guard=guard_for(self.config))
             except Exception as exc:  # noqa: BLE001
                 raise ActionFailure(ErrorCode.SITE_UNAVAILABLE, str(exc)[:300], retryable=False) from exc
             ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}.get(media)

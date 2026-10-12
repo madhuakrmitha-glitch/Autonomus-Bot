@@ -126,6 +126,11 @@ class FixtureSite:
                     self.send_response(503)
                     self.end_headers()
                     return
+                if path == "/redirect":
+                    self.send_response(302)
+                    self.send_header("Location", parse_qs(urlsplit(self.path).query)["to"][0])
+                    self.end_headers()
+                    return
                 return super().do_GET()
 
             def do_POST(self):  # noqa: N802

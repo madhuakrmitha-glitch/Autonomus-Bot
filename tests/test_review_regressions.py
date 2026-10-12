@@ -6,10 +6,12 @@ import asyncio
 
 import pytest
 
+from omca import netguard
 from omca.contracts import ActionStatus, ReceiptStatus, TaskRequest, TaskStatus, WorkerHeartbeat
 from omca.coordinator import Coordinator
 from omca.db import dumps
 from omca.engine import TaskContext
+from omca.netguard import is_private_host, url_problem
 from omca.util import new_id, now_iso
 from omca.worker.agent import HandlerResult, InProcessTransport, WorkerAgent
 from omca.workers import WorkerError
@@ -232,3 +234,138 @@ async def test_worker_refuses_a_press_or_point_click_on_a_different_target(make_
     assert nothing_focused.status == ReceiptStatus.SUCCEEDED
     other = await run("browser.click_point", {"x": 5, "y": 5, "_fingerprint": "0123456789abcdef"})
     assert other.status == ReceiptStatus.FAILED and other.error.code.value == "STALE_ELEMENT_REF"
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Network destinations (SSRF)
+# ---------------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("host", ["127.1", "0x7f.0.0.1", "2130706433", "017700000001", "::ffff:127.0.0.1", "::1",
+                                  "0.0.0.0", "localhost.", "printer.localhost", "169.254.169.254", "100.64.0.1",
+                                  "[fd00::1]", "router", "nas.home.arpa"])
+def test_private_hosts_in_any_spelling(host):
+    assert is_private_host(host)
+
+
+@pytest.mark.parametrize("host", ["example.com", "8.8.8.8", "2606:4700:4700::1111", "cafe.be"])
+def test_public_hosts(host):
+    assert not is_private_host(host)
+
+
+@pytest.mark.parametrize("url", ["http://evil.example\\@127.0.0.1/", "http://user:pw@example.com/",
+                                 "http://exa mple.com/", "http://example.com:99999/", "ftp://example.com/"])
+def test_ambiguous_urls_are_refused(url):
+    assert url_problem(url)
+
+
+def test_navigation_classifier_uses_the_same_host_rules(tmp_path):
+    from omca.config import config_from_dict
+    from omca.contracts import ActionIntent
+    from omca.db import Database
+    from omca.policy.gate import PolicyGate
+    from omca.policy.operations import PolicyContext
+
+    from .conftest import base_config
+
+    cfg = config_from_dict(base_config(tmp_path))  # allows 127.0.0.1 only
+    gate = PolicyGate(Database(cfg.storage.database_path), cfg)
+
+    def verdict(url):
+        intent = ActionIntent(action_id="a", task_id="t", operation="browser.navigate", arguments={"url": url},
+                              idempotency_key="k")
+        return gate.evaluate(intent, PolicyContext(cfg, None))[0].verdict.value
+
+    assert verdict("http://127.0.0.1:8080/") == "ALLOW"
+    for url in ("http://127.1:8080/", "http://2130706433/", "http://[::ffff:127.0.0.1]/", "http://x\\@127.0.0.1/",
+                "http://u@127.0.0.1/"):
+        assert verdict(url) == "DENY", url
+
+
+async def test_names_that_resolve_to_private_addresses_are_refused(monkeypatch):
+    monkeypatch.setattr(netguard, "resolve_private_sync",
+                        lambda host: ["10.1.2.3"] if host == "intranet.example.com" else [])
+    guard = netguard.UrlGuard(allowed_hosts=["wiki.example.com"])
+    with pytest.raises(netguard.BlockedDestination):
+        await guard.check("https://intranet.example.com/")
+    await guard.check("https://www.example.com/")
+    monkeypatch.setattr(netguard, "resolve_private_sync", lambda host: ["10.9.9.9"])
+    await guard.check("https://wiki.example.com/")  # the owner allowed this intranet host
+
+
+async def test_retrieval_checks_every_redirect_hop(site):
+    from omca.research.search import HttpRetrievalAdapter, SearchError, fetch_image
+
+    guard = netguard.UrlGuard(allowed_hosts=["127.0.0.1"])
+    adapter = HttpRetrievalAdapter("omca-test", guard=guard)
+    page = await adapter.retrieve(site.url("/redirect?to=/research/solar.html"), ["markdown"])
+    assert page.final_url.endswith("/research/solar.html")
+    hidden = f"http://localhost:{site.port}/research/solar.html"
+    with pytest.raises(SearchError, match="private network host localhost"):
+        await adapter.retrieve(site.url(f"/redirect?to={hidden}"), ["markdown"])
+    with pytest.raises(SearchError, match="private network host localhost"):
+        await fetch_image(site.url(f"/redirect?to=http://localhost:{site.port}/chart.png"), "omca-test", guard=guard)
+
+
+@pytest.mark.browser
+async def test_browser_task_pages_cannot_reach_unapproved_private_hosts(make_system, site, brain):
+    s = await make_system()
+    task = s.coord.tasks.create(TaskRequest(goal="probe"), owner=s.coord.owner_key, workflow="browser_task", limits={})
+    s.coord.tasks.transition(task.id, TaskStatus.CANCELLED, reason="jobs are dispatched by hand")
+
+    async def run(op, args):
+        job = _job(s.coord, task.id, "vm1", op=op, resource="vm1:ui", args=args)
+        return await s.coord.workers.dispatch(job.model_copy(update={"attachment_id": "vm1-test"}), 30)
+
+    hidden = f"http://localhost:{site.port}"
+    ok = await run("browser.navigate", {"url": site.url("/form.html")})
+    assert ok.status == ReceiptStatus.SUCCEEDED
+    page = s.worker.browser._sessions["vm1-test"].pages[task.id]
+    script = "u => fetch(u).then(r => r.status, () => 'blocked')"
+    assert await page.evaluate(script, site.url("/form.html")) == 200
+    assert await page.evaluate(script, f"{hidden}/form.html") == "blocked"
+    # an HTTP redirect is followed by the browser itself, so the landing page is checked
+    redirected = await run("browser.navigate", {"url": site.url(f"/redirect?to={hidden}/form.html")})
+    assert redirected.status == ReceiptStatus.FAILED and redirected.error.code.value == "POLICY_DENIED"
+    assert page.url == "about:blank"
+    image = await run("browser.fetch_image", {"src": site.url(f"/redirect?to={hidden}/chart.png")})
+    assert image.status == ReceiptStatus.FAILED and image.error.code.value == "POLICY_DENIED"
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Classification
+# ---------------------------------------------------------------------------------------------------------
+
+
+def test_same_page_links_and_cookie_image_fetches_stay_possible_mutations(tmp_path):
+    from omca.config import config_from_dict
+    from omca.contracts import ActionCategory as C
+    from omca.contracts import ActionIntent, ElementRef, Observation, Rect, Viewport
+    from omca.db import Database
+    from omca.policy.gate import PolicyGate
+    from omca.policy.operations import PolicyContext
+
+    from .conftest import base_config
+
+    cfg = config_from_dict(base_config(tmp_path))
+    gate = PolicyGate(Database(cfg.storage.database_path), cfg)
+    page = "https://shop.example/cart"
+
+    def link(href):
+        return ElementRef(ref="e1", role="link", name="Details", tag="a", href=href, rect=Rect(x=0, y=0, width=9, height=9),
+                          fingerprint="fp")
+
+    def category(op, args, element=None):
+        o = Observation(observation_id="o", worker_id="vm1", session_id="s", url=page, captured_at=now_iso(),
+                        viewport=Viewport(width=800, height=600), elements=[element] if element else [])
+        intent = ActionIntent(action_id="a", task_id="t", operation=op, arguments=args, idempotency_key="k",
+                              observation_id="o")
+        return gate.evaluate(intent, PolicyContext(cfg, o))[0].category
+
+    assert category("browser.click", {"ref": "e1"}, link(page + "#")) == C.UNKNOWN_MUTATION
+    assert category("browser.click", {"ref": "e1"}, link("#item-3")) == C.UNKNOWN_MUTATION
+    assert category("browser.click", {"ref": "e1"}, link("https://shop.example/help")) == C.NAVIGATION
+    bad = {"src": "https://shop.example/account/delete?id=3"}
+    assert category("web.fetch_image", bad) == C.READ                 # no cookies: cannot act for the owner
+    assert category("browser.fetch_image", bad) == C.UNKNOWN_MUTATION  # session cookies: may act for the owner
+    assert category("browser.fetch_image", {"src": "https://shop.example/img/a.png"}) == C.READ

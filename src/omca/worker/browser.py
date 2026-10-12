@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 from ..config import BrowserAttachment
 from ..contracts import (
@@ -32,6 +33,7 @@ from ..contracts import (
     Viewport,
     WorkerJob,
 )
+from ..netguard import UrlGuard, is_private_host, normalize_host, parse_ip, resolve_private
 from ..util import new_id, now_iso, sha256_bytes
 from .agent import HandlerResult, JobContext, JobFailure
 
@@ -221,6 +223,28 @@ class BrowserSession:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     new_pages: list[Any] = field(default_factory=list)
     downloads: list[str] = field(default_factory=list)
+    guarded: set[Any] = field(default_factory=set)
+    resolved_private: dict[str, bool] = field(default_factory=dict)
+
+    @property
+    def guard(self) -> UrlGuard:
+        return UrlGuard(allowed_origins=self.attachment.allowed_private_origins)
+
+    async def private_destination(self, url: str, *, resolve: bool) -> bool:
+        """True when ``url`` is on the private network and the attachment does not allow it."""
+        if not url.startswith(("http://", "https://")):
+            return False
+        guard = self.guard
+        if guard.private_allowed(url):
+            return False
+        host = normalize_host(urlsplit(url).hostname)
+        if is_private_host(host):
+            return True
+        if not resolve or parse_ip(host) is not None:
+            return False
+        if host not in self.resolved_private:
+            self.resolved_private[host] = bool(await resolve_private(host))
+        return self.resolved_private[host]
 
 
 class BrowserManager:
@@ -291,7 +315,35 @@ class BrowserManager:
             page = await sess.context.new_page()
             sess.new_pages = [p for p in sess.new_pages if p is not page]
             sess.pages[task_id] = page
+        await self.guard_page(sess, page)
         return page
+
+    async def guard_page(self, sess: BrowserSession, page) -> None:
+        """Refuse requests from a task page to private network hosts the attachment does not allow.
+
+        Playwright routes only the first request of a redirect chain, so the landing URL is checked
+        again after every action (``check_location``).
+        """
+        if page in sess.guarded:
+            return
+
+        async def handler(route, request):
+            if await sess.private_destination(request.url, resolve=request.is_navigation_request()):
+                await route.abort("blockedbyclient")
+            else:
+                await route.continue_()
+
+        await page.route("**/*", handler)
+        sess.guarded.add(page)
+
+    async def check_location(self, sess: BrowserSession, page) -> None:
+        if await sess.private_destination(page.url, resolve=True):
+            where = page.url
+            try:
+                await page.goto("about:blank")
+            except Exception:  # noqa: BLE001
+                pass
+            raise JobFailure(ErrorCode.POLICY_DENIED, f"the page went to a private network address ({where[:120]})")
 
     async def close(self) -> None:
         for s in self._sessions.values():
@@ -372,6 +424,7 @@ class BrowserManager:
                 sess.pages[task_id] = newest
                 page = newest
                 new_tab = True
+                await self.guard_page(sess, page)
         try:
             await page.wait_for_load_state("domcontentloaded", timeout=15000)
         except Exception:  # noqa: BLE001
@@ -415,6 +468,7 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
     async def _after(sess, page, job: WorkerJob, ctx: JobContext, result: dict[str, Any], download: str | None = None,
                      extra_artifacts: list[str] | None = None) -> HandlerResult:
         page, new_tab = await manager.settle(sess, page, job.task_id)
+        await manager.check_location(sess, page)
         obs, arts = await manager.observe(sess, page, ctx)
         verification = verify_expected(job.expected, obs, new_tab, download)
         result = {**result, "new_tab": new_tab, "url": obs.url}
@@ -435,6 +489,7 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
             url = job.arguments.get("url")
             if url:
                 await _goto(page, url)
+                await manager.check_location(sess, page)
             obs, arts = await manager.observe(sess, page, ctx)
         return HandlerResult(result={"url": obs.url, "title": obs.title, "text": obs.text}, observation=obs,
                              artifact_ids=arts)
@@ -570,10 +625,25 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
             data = base64.b64decode(b64)
             media = header[5:].split(";")[0]
         else:
-            try:
-                resp = await sess.context.request.get(src, timeout=30000)
-            except Exception as exc:  # noqa: BLE001
-                raise JobFailure(ErrorCode.SITE_UNAVAILABLE, f"image fetch failed: {exc}"[:300], retryable=True) from exc
+            url = src
+            for _ in range(6):
+                # the session's cookies go with this request, so every redirect hop is checked first
+                problem = sess.guard.static_problem(url)
+                if problem is None and await sess.private_destination(url, resolve=True):
+                    problem = "private network address"
+                if problem:
+                    raise JobFailure(ErrorCode.POLICY_DENIED, f"image fetch refused for {url[:120]}: {problem}")
+                try:
+                    resp = await sess.context.request.get(url, timeout=30000, max_redirects=0)
+                except Exception as exc:  # noqa: BLE001
+                    raise JobFailure(ErrorCode.SITE_UNAVAILABLE, f"image fetch failed: {exc}"[:300], retryable=True) from exc
+                location = resp.headers.get("location")
+                if 300 <= resp.status < 400 and location:
+                    url = urljoin(url, location)
+                    continue
+                break
+            else:
+                raise JobFailure(ErrorCode.SITE_UNAVAILABLE, "image fetch: too many redirects")
             if resp.status >= 400:
                 raise JobFailure(ErrorCode.SITE_UNAVAILABLE, f"image fetch returned HTTP {resp.status}")
             data = await resp.body()

@@ -44,7 +44,7 @@ def build_worker_handlers(attachments: list[BrowserAttachment], *, smtp: SmtpCon
     if "video" in caps:
         from .worker.media import make_media_handlers
 
-        handlers.update(make_media_handlers())
+        handlers.update(make_media_handlers(sorted({o for a in attachments for o in a.allowed_private_origins})))
     if caps & {"spreadsheet", "email", "calendar", "desktop", "document"}:
         from .worker.office import make_office_handlers
 
