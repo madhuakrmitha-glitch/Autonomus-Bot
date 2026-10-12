@@ -98,7 +98,11 @@ class Notifier:
                 elif r["kind"] == "edit":
                     target = self.result(payload["ref"]) if payload["ref"].startswith("out_") else {"message_id": payload["ref"]}
                     if not target:
-                        continue  # original not sent yet; retry later
+                        original = self.db.scalar("SELECT status FROM outbox WHERE id=?", (payload["ref"],))
+                        if original in (None, "FAILED"):
+                            self.db.execute("UPDATE outbox SET status='FAILED', last_error=? WHERE id=?",
+                                            ("original message was never delivered", r["id"]))
+                        continue  # otherwise the original is not sent yet; retry later
                     res = await self.channel.edit_text(chat, target["message_id"], payload["text"],
                                                        _buttons(payload.get("buttons")))
                 elif r["kind"] == "document":

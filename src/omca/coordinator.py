@@ -413,7 +413,8 @@ class Coordinator:
             target.unlink(missing_ok=True)
             return {"deleted": existed, "path": str(target)}
         if operation == "telegram.send_owner":
-            key = f"deliver:{ctx.task_id}:{args.get('artifact_id') or ''}:{hash(args['text']) & 0xffffffff}"
+            # stable across processes so a replayed delivery step hits the same outbox row
+            key = f"deliver:{ctx.task_id}:{args.get('artifact_id') or ''}:{digest(args['text'])[:16]}"
             if args.get("artifact_id"):
                 m = self.artifacts.get(args["artifact_id"])
                 if m is None:

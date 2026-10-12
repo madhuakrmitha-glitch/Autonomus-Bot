@@ -207,3 +207,20 @@ async def test_desktop_office_workflow_confirms_consequential_changes(make_syste
     assert updated.active["B2"].value == 42 and updated.active["C1"].value == "Checked"
     original = load_workbook(BytesIO(s.coord.artifacts.read_bytes(art)))
     assert original.active["B2"].value == 10  # the original was not overwritten
+
+
+async def test_progress_heartbeat_and_state_change_notifications(make_system, site, brain):
+    """NFR02: state changes produce messages; long-running work refreshes one status message."""
+    s = await make_system(limits={"progress_interval_seconds": 0.5})
+    brain.browser_script = [{"name": "wait", "arguments": {"ms": 700}} for _ in range(4)] + [
+        {"name": "finish", "arguments": {"success": True, "summary": "done"}}]
+    brain.verify_markers = ["Contact us"]
+    t = s.coord.submit_task(TaskRequest(goal="Wait on the form page", workflow="browser_task",
+                                        params={"url": site.url("/form.html")}))
+    await s.wait(t.id, timeout=60)
+    await s.flush()
+    ack = s.channel.messages[0]  # the acknowledgement becomes the task's live status message
+    assert ack.edits, "the status message was never refreshed during work"
+    assert any("Step:" in e for e in ack.edits)
+    assert any("verifying" in m.text for m in s.channel.messages)
+    assert any("completed" in m.text for m in s.channel.messages)

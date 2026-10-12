@@ -316,8 +316,9 @@ async def _visual(ctx, pages: list[RetrievedPage], goal: str) -> dict[str, Any]:
             lim = f"values not confirmed (unreadable or inconsistent on zoom): {', '.join(unclear[:8])}"
             limitations.append(f"figure {k + 1}: {lim}")
         ev = c.evidence.record(
-            ctx.task_id, kind="image_region", source_url=src, final_url=src, captured_at=out.receipt.get("finished_at")
-            if out.receipt else "", content_for_hash=manifest.sha256, image_artifact_id=art_id,
+            ctx.task_id, kind="image_region", source_url=src, final_url=src,
+            captured_at=((out.receipt or {}).get("finished_at") or manifest.created_at),
+            content_for_hash=manifest.sha256, image_artifact_id=art_id,
             region=Rect(x=0, y=0, width=manifest.width or 0, height=manifest.height or 0),
             locator={"page_url": page_url, "confirmed_values": confirmed},
             limitations=("read by an open vision model; " + (lim or "all reported values confirmed on zoom")),
