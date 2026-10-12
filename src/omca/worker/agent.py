@@ -34,6 +34,7 @@ from ..contracts import (
     WorkerJob,
     WorkerRegistration,
 )
+from ..policy.operations import OPERATIONS
 from ..util import now_iso, parse_iso, sha256_bytes, utcnow
 
 
@@ -94,7 +95,7 @@ class WorkerAgent:
         self.transport = transport
         self.workspace = Path(workspace)
         self.workspace.mkdir(parents=True, exist_ok=True)
-        (self.workspace / "receipts").mkdir(exist_ok=True)
+        (self.workspace / "receipts" / "jobs").mkdir(parents=True, exist_ok=True)
         (self.workspace / "started").mkdir(exist_ok=True)
         self.capabilities = capabilities
         self.attachments = {a.id: a for a in attachments or []}
@@ -108,6 +109,8 @@ class WorkerAgent:
         self.last_heartbeat_ok = 0.0
         self.clock_skew = 0.0
         self.cancelled: set[str] = set()
+        # set when the coordinator reports that a newer process registered as this worker: never act again
+        self.fenced = False
         self._running: asyncio.Task | None = None
         self._stop = asyncio.Event()
 
@@ -142,7 +145,10 @@ class WorkerAgent:
                     job = await self.transport.claim(self.epoch, self.claim_wait_seconds)
                 except asyncio.CancelledError:
                     raise
-                except Exception:  # noqa: BLE001 - transport or stale-session errors: back off and retry
+                except Exception as exc:  # noqa: BLE001 - transport errors: back off and retry
+                    if _stale_session(exc):
+                        self._fence()
+                        break
                     await asyncio.sleep(2)
                     continue
                 if job is None:
@@ -172,7 +178,9 @@ class WorkerAgent:
     async def heartbeat(self) -> None:
         try:
             resp = await self.transport.heartbeat(WorkerHeartbeat(session_epoch=self.epoch, health={"ok": True}))
-        except Exception:  # noqa: BLE001 - a failed heartbeat simply ages the connection
+        except Exception as exc:  # noqa: BLE001 - a failed heartbeat simply ages the connection
+            if _stale_session(exc):
+                self._fence()
             return
         self.last_heartbeat_ok = time.monotonic()
         self._sync_clock(resp.get("server_time"))
@@ -182,6 +190,13 @@ class WorkerAgent:
             self.cancelled.add(jid)
             if self._running is not None and getattr(self._running, "omca_job_id", None) == jid:
                 self._running.cancel()
+
+    def _fence(self) -> None:
+        """A newer process owns this worker id: stop claiming and stop whatever is running."""
+        self.fenced = True
+        self._stop.set()
+        if self._running is not None:
+            self._running.cancel()
 
     async def _submit_with_retry(self, receipt: ActionReceipt) -> None:
         for delay in (0, 1, 2, 4, 8):
@@ -198,6 +213,9 @@ class WorkerAgent:
     def _receipt_path(self, action_id: str) -> Path:
         return self.workspace / "receipts" / f"{action_id}.json"
 
+    def _job_receipt_path(self, job_id: str) -> Path:
+        return self.workspace / "receipts" / "jobs" / f"{job_id}.json"
+
     def _started_path(self, action_id: str) -> Path:
         return self.workspace / "started" / f"{action_id}.json"
 
@@ -210,6 +228,8 @@ class WorkerAgent:
 
     def fence_check(self, job: WorkerJob) -> ActionReceipt | None:
         """Validate the fencing token, lease expiry and connection health before acting."""
+        if self.fenced:
+            return self._reject(job, ErrorCode.STALE_FENCING_TOKEN, "this worker process was superseded; not acting")
         newest = self.highest_tokens.get(job.resource, 0)
         if job.fencing_token < newest:
             return self._reject(job, ErrorCode.STALE_FENCING_TOKEN,
@@ -229,9 +249,15 @@ class WorkerAgent:
         return None
 
     async def execute(self, job: WorkerJob) -> ActionReceipt:
+        job_cached = self._job_receipt_path(job.job_id)
+        if job_cached.exists():
+            return ActionReceipt.model_validate_json(job_cached.read_text(encoding="utf-8"))
         cached = self._receipt_path(job.action_id)
-        if cached.exists():
-            return ActionReceipt.model_validate_json(cached.read_text(encoding="utf-8"))
+        spec = OPERATIONS.get(job.operation)
+        if cached.exists() and not (spec is not None and spec.retry_safe):
+            # an effect is never repeated for the same action, whichever job asks for it again
+            prior = ActionReceipt.model_validate_json(cached.read_text(encoding="utf-8"))
+            return prior.model_copy(update={"job_id": job.job_id, "fencing_token": job.fencing_token})
         rejection = self.fence_check(job)
         if rejection is not None:
             return rejection
@@ -279,6 +305,7 @@ class WorkerAgent:
                                     component_versions=self.versions())
         finally:
             self._running = None
+        job_cached.write_text(receipt.model_dump_json(), encoding="utf-8")
         cached.write_text(receipt.model_dump_json(), encoding="utf-8")
         return receipt
 
@@ -302,6 +329,13 @@ class WorkerAgent:
         if self._started_path(action_id).exists():
             return HandlerResult(result={"known": True, "state": "started_without_receipt"})
         return HandlerResult(result={"known": False, "state": "never_started"})
+
+
+def _stale_session(exc: BaseException) -> bool:
+    """The coordinator refused this process's session epoch (a newer process registered)."""
+    if getattr(exc, "code", None) == ErrorCode.STALE_FENCING_TOKEN:
+        return True
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response is not None and exc.response.status_code == 409
 
 
 # ---------------------------------------------------------------------------

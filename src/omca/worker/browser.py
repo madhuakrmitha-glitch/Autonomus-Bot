@@ -167,6 +167,14 @@ HIT_TEST_JS = DESCRIBE_JS + r"""
 }
 """
 
+FOCUS_JS = DESCRIBE_JS + r"""
+() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  return __omcaDescribe(el);
+}
+"""
+
 VIDEO_INFO_JS = r"""
 () => Array.from(document.querySelectorAll("video")).map((v, i) => ({index: i, duration: v.duration,
   src: v.currentSrc || v.src || "", width: v.videoWidth, height: v.videoHeight, paused: v.paused,
@@ -477,8 +485,8 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
         sess, page = await _common(job, ctx)
         x, y = float(job.arguments["x"]), float(job.arguments["y"])
         async with sess.lock:
-            expect = job.arguments.get("expect_fingerprint")
-            if expect:
+            # the element the decision (and any approval) was made for must still be under the point
+            for expect in {job.arguments.get("expect_fingerprint"), job.arguments.get("_fingerprint")} - {None}:
                 desc = await page.evaluate(HIT_TEST_JS, {"x": x, "y": y})
                 if desc is None or fingerprint(desc) != expect:
                     raise JobFailure(ErrorCode.STALE_ELEMENT_REF, "the element under the click point changed",
@@ -508,6 +516,13 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
         sess, page = await _common(job, ctx)
         async with sess.lock:
             key = job.arguments["key"]
+            expect = job.arguments.get("_focus_fp")
+            if expect:
+                # a key acts on whatever has focus: it must still be the element the decision was made for
+                desc = await page.evaluate(FOCUS_JS)
+                if (fingerprint(desc) if desc else "none") != expect:
+                    raise JobFailure(ErrorCode.STALE_ELEMENT_REF, "keyboard focus moved since the key press was decided",
+                                     retryable=True)
             await page.keyboard.press("Space" if key == " " else key)
             return await _after(sess, page, job, ctx, {"key": key})
 

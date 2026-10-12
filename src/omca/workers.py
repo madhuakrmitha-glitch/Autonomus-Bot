@@ -29,6 +29,7 @@ from .contracts import (
     WorkerRegistration,
 )
 from .db import Database, dumps, loads
+from .policy.operations import OPERATIONS
 from .secrets import resolve
 from .util import iso, new_id, now_iso, parse_iso, utcnow
 
@@ -130,7 +131,7 @@ class WorkerManager:
         tokens = {r["name"]: r["fencing_counter"] for r in self.db.query("SELECT * FROM resources WHERE name LIKE ?",
                                                                           (f"{worker_id}:%",))}
         cancelled = [r["id"] for r in self.db.query(
-            "SELECT id FROM jobs WHERE worker_id=? AND status='CANCELLED' AND receipt_json IS NULL", (worker_id,))]
+            "SELECT id FROM jobs WHERE worker_id=? AND status='CLAIMED' AND cancel_requested=1", (worker_id,))]
         return {"ok": True, "server_time": now_iso(), "fencing_tokens": tokens, "cancel_job_ids": cancelled}
 
     def mark_offline_workers(self) -> list[str]:
@@ -269,10 +270,22 @@ class WorkerManager:
             self._waiters.pop(job.job_id, None)
 
     def cancel_job(self, job_id: str) -> None:
-        """Cancel a job that no worker has claimed yet (nothing ran, so the outcome is a clean failure)."""
+        """Cancel a job.
+
+        An unclaimed job is finished as a clean failure (nothing ran). A claimed read-only job is
+        interrupted through the worker's next heartbeat. A claimed mutation is left to finish, because
+        interrupting it would leave its effect uncertain; its receipt is recorded as usual.
+        """
         with self.db.tx() as c:
             r = c.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
-            if r is None or r["status"] != "PENDING":
+            if r is None:
+                return
+            if r["status"] == "CLAIMED":
+                spec = OPERATIONS.get(r["operation"])
+                if spec is not None and spec.retry_safe:
+                    c.execute("UPDATE jobs SET cancel_requested=1, updated_at=? WHERE id=?", (now_iso(), job_id))
+                return
+            if r["status"] != "PENDING":
                 return
             now = now_iso()
             rec = ActionReceipt(action_id=r["action_id"], job_id=job_id, worker_id=r["worker_id"],
@@ -287,9 +300,12 @@ class WorkerManager:
                         "('DONE','EXPIRED','CANCELLED')", (job_id,))
 
     def claim(self, worker_id: str, epoch: str) -> WorkerJob | None:
-        self._check_epoch(worker_id, epoch)
         now = now_iso()
         with self.db.tx() as c:
+            # checked in the same transaction as the claim, so a re-registration cannot slip in between
+            live = c.execute("SELECT session_epoch FROM workers WHERE id=?", (worker_id,)).fetchone()
+            if live is None or live[0] != epoch:
+                raise WorkerError(ErrorCode.STALE_FENCING_TOKEN, "stale worker session; register again")
             rows = c.execute("SELECT * FROM jobs WHERE worker_id=? AND status='PENDING' ORDER BY created_at",
                              (worker_id,)).fetchall()
             for r in rows:

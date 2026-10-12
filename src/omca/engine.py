@@ -632,7 +632,7 @@ class TaskContext:
             args["_obs"] = intent.observation_id
         if fingerprint:
             args["_fingerprint"] = fingerprint
-        if intent.operation == "browser.press":
+        if intent.operation == "browser.press" and (fingerprint or approval_id):
             args["_focus_fp"] = fingerprint or "none"  # the worker refuses if focus moved
         if spec.retry_safe:
             # a read-only re-execution gets a fresh job; finished attempts are kept for the audit trail
