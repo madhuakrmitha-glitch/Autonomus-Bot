@@ -135,6 +135,10 @@ class TaskContext:
         self.limitations: list[str] = []
         # set on every runner (re)start: the first live observation must re-check the real page state
         self.needs_live_check = True
+        # increments on every runner (re)start; keys live-state checks so a resumed run never reuses old ones
+        key = f"run_epoch:{task.id}"
+        self.run_epoch = int(coord.db.kv_get(key, 0)) + 1
+        coord.db.kv_set(key, self.run_epoch)
 
     # -- identity / helpers -------------------------------------------------------------------
     @property
@@ -456,9 +460,7 @@ class TaskContext:
                                      attachment_id=attachment_id, worker_id=worker_id)
             if hit_out.ok and hit_out.result.get("element"):
                 hit = ElementRef.model_validate(hit_out.result["element"])
-        pctx = PolicyContext(self.config, observation, hit_test=hit,
-                             attachment_private_origins=attachment.allowed_private_origins if attachment else None)
-        decision, cls = self.c.policy.evaluate(intent, pctx)
+        decision, cls = self.c.policy.evaluate(intent, self._policy_context(observation, attachment, hit=hit))
         self._set_action(action_id, category=decision.category.value, verdict=decision.verdict.value,
                          policy_reason=decision.reason, policy_version=decision.policy_version,
                          destination=decision.destination,
@@ -509,11 +511,18 @@ class TaskContext:
                 return resolved
         return self._outcome_from_row(self._action_row(idem))
 
+    def _policy_context(self, observation, attachment, *, hit: ElementRef | None = None) -> PolicyContext:
+        return PolicyContext(self.config, observation, hit_test=hit,
+                             attachment_private_origins=attachment.allowed_private_origins if attachment else None,
+                             task_id=self.task.id, artifacts=self.c.artifacts.get,
+                             task_inputs=list(self.task.request.attachments))
+
     # -- approval -------------------------------------------------------------------------------------
     def _preconditions(self, operation: str, arguments: dict[str, Any], element: ElementRef | None,
                        observation: Observation | None) -> dict[str, Any]:
         if operation.startswith("browser."):
             return {"origin": origin_of(observation.url) if observation else None,
+                    "url": observation.url.split("#", 1)[0] if observation else None,
                     "fingerprint": element.fingerprint if element else None,
                     "role": element.role if element else None, "name": element.name if element else None}
         return self.c.target_state(operation, arguments)
@@ -546,26 +555,42 @@ class TaskContext:
         fresh_obs = observation
         fresh_args = dict(intent.arguments)
         current_element = element
-        if intent.operation.startswith("browser.") and intent.operation != "browser.navigate":
-            obs_out = await self.act("browser.observe", {"include_images": False}, key=f"{intent.idempotency_key}:reval",
-                                     attachment_id=attachment_id, worker_id=worker_id)
+        op = intent.operation
+        is_browser = op.startswith("browser.")
+        if is_browser and op != "browser.navigate":
+            ep = self.run_epoch
+            obs_out = await self.act("browser.observe", {"include_images": False},
+                                     key=f"{intent.idempotency_key}:reval:{ep}", attachment_id=attachment_id,
+                                     worker_id=worker_id)
             fresh_obs = obs_out.obs
-            if intent.operation == "browser.click_point":
+            if op == "browser.click_point":
                 hit = await self.act("browser.hit_test", {"x": intent.arguments["x"], "y": intent.arguments["y"]},
-                                     key=f"{intent.idempotency_key}:rehit", attachment_id=attachment_id, worker_id=worker_id)
+                                     key=f"{intent.idempotency_key}:rehit:{ep}", attachment_id=attachment_id,
+                                     worker_id=worker_id)
                 current_element = ElementRef.model_validate(hit.result["element"]) if hit.ok and hit.result.get("element") else None
+            elif op == "browser.press":
+                # a key press acts on whatever has focus now, so the focused element must be the approved one
+                current_element = None
+                if fresh_obs is not None and fresh_obs.focused_ref:
+                    current_element = next((e for e in fresh_obs.elements if e.ref == fresh_obs.focused_ref), None)
             elif fresh_obs is not None and fp:
                 current_element = next((e for e in fresh_obs.elements if e.fingerprint == fp), None)
                 if current_element is not None and "ref" in fresh_args:
                     fresh_args["ref"] = current_element.ref
-            elif intent.operation == "browser.press" and fresh_obs is not None and fresh_obs.focused_ref:
-                current_element = next((e for e in fresh_obs.elements if e.ref == fresh_obs.focused_ref), None)
         fresh_intent = intent.model_copy(update={"arguments": fresh_args,
                                                  "observation_id": fresh_obs.observation_id if fresh_obs else None})
-        now_pre = self._preconditions(intent.operation, fresh_args, current_element, fresh_obs)
+        # classify again against the live state: the destination and verdict must still hold
+        attachment = self.c.attachment(attachment_id) if attachment_id else None
+        live_ctx = self._policy_context(fresh_obs, attachment,
+                                        hit=current_element if op == "browser.click_point" else None)
+        live_decision, _ = self.c.policy.evaluate(fresh_intent, live_ctx)
+        now_pre = self._preconditions(op, fresh_args, current_element, fresh_obs)
         try:
+            if live_decision.verdict == PolicyVerdict.DENY:
+                self.c.approvals.invalidate(approval_id, f"no longer permitted: {live_decision.reason}")
+                raise ApprovalError(ErrorCode.APPROVAL_INVALID, f"the action is no longer permitted ({live_decision.reason})")
             self.c.approvals.consume(approval_id, fresh_intent, owner=self.c.owner_key, fingerprint=fp,
-                                     destination=decision.destination, current_preconditions=now_pre,
+                                     destination=live_decision.destination, current_preconditions=now_pre,
                                      current_policy_version=self.c.policy.version)
         except ApprovalError as exc:
             self._set_action(intent.action_id, status=ActionStatus.DENIED,
@@ -607,6 +632,13 @@ class TaskContext:
             args["_obs"] = intent.observation_id
         if fingerprint:
             args["_fingerprint"] = fingerprint
+        if intent.operation == "browser.press":
+            args["_focus_fp"] = fingerprint or "none"  # the worker refuses if focus moved
+        if spec.retry_safe:
+            # a read-only re-execution gets a fresh job; finished attempts are kept for the audit trail
+            prior = self.c.workers.job_for_action(intent.action_id)
+            if prior is not None and prior["status"] in ("DONE", "EXPIRED", "CANCELLED"):
+                self.c.workers.supersede_job(prior["id"])
         timeout = 600.0 if intent.operation in ("media.fetch", "browser.video_frames", "browser.download") else 90.0
         job = WorkerJob(job_id=new_id("job"), task_id=self.task.id, action_id=intent.action_id, worker_id=wid,
                         lease_id=lease.lease_id, resource=resource, fencing_token=lease.fencing_token,
@@ -661,13 +693,24 @@ class TaskContext:
             self._set_action(row["id"], status=ActionStatus.INTENDED)
             self.c.tasks.event(self.task.id, "reconciled", {"action_id": row["id"], "via": "read-only retry"})
             return None
-        if spec is not None and spec.executor == "coordinator" and job is None and row["status"] == "DISPATCHED":
+        if spec is None or spec.executor == "coordinator":
+            # coordinator-side effects (sends, deletions) have no job to consult: reconcile, never re-run
             return await self._resolve_uncertain(row, spec)
         if job is None:
             # never handed to a worker: nothing can have happened
             self._set_action(row["id"], status=ActionStatus.INTENDED)
             return None
         return await self._resolve_uncertain(row, spec)
+
+    def _same_session(self, job: dict[str, Any], rec: ActionOutcome) -> bool:
+        """'Never started' is only trustworthy from the worker process that claimed the original job.
+
+        A different (newer) process cannot know whether an older one is about to act.
+        """
+        if job.get("claimed_epoch") is None:
+            return job.get("status") in ("EXPIRED", "CANCELLED", "DONE")  # never claimed and no longer claimable
+        recon = self.c.workers.job_for_action(rec.action_id)
+        return recon is not None and recon.get("claimed_epoch") == job["claimed_epoch"]
 
     async def _resolve_uncertain(self, row: Any, spec) -> ActionOutcome | None:
         """Never repeat a consequential effect blindly: ask the worker, then the owner."""
@@ -684,7 +727,7 @@ class TaskContext:
                     self._set_action(row["id"], status=st, receipt_json=prior.model_dump_json())
                     self.c.tasks.event(self.task.id, "reconciled", {"action_id": row["id"], "via": "worker receipt cache"})
                     return self._outcome_from_row(self._action_row(row["idempotency_key"]))
-            elif state == "never_started":
+            elif state == "never_started" and self._same_session(job, rec):
                 self._set_action(row["id"], status=ActionStatus.FAILED,
                                  receipt_json=dumps({"status": "FAILED", "error": {
                                      "code": ErrorCode.WORKER_UNAVAILABLE.value, "retryable": True,

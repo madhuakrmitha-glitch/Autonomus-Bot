@@ -281,6 +281,11 @@ class WorkerManager:
                                                                     message="cancelled before a worker claimed it"))
             self._finish_job(c, job_id, rec, status="CANCELLED")
 
+    def supersede_job(self, job_id: str) -> None:
+        """Detach a finished job from its action so a read-only action can be executed again."""
+        self.db.execute("UPDATE jobs SET action_id = action_id || ':superseded:' || id WHERE id=? AND status IN "
+                        "('DONE','EXPIRED','CANCELLED')", (job_id,))
+
     def claim(self, worker_id: str, epoch: str) -> WorkerJob | None:
         self._check_epoch(worker_id, epoch)
         now = now_iso()

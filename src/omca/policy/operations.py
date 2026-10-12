@@ -283,6 +283,9 @@ class PolicyContext:
     hit_test: ElementRef | None = None
     attachment_private_origins: list[str] | None = None
     task_sources: list[str] | None = None
+    task_id: str | None = None
+    artifacts: Callable[[str], Any] | None = None  # artifact lookup, to check that inputs belong to the task
+    task_inputs: list[str] | None = None  # artifact ids the owner attached to the task request
 
 
 def _element(ctx: PolicyContext, ref: str) -> ElementRef | None:

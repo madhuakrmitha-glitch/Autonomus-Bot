@@ -179,6 +179,11 @@ class ApprovalService:
             self._notify(r["id"])
         return [r["id"] for r in rows]
 
+    def invalidate(self, approval_id: str, reason: str) -> None:
+        self.db.execute("UPDATE approvals SET status='INVALIDATED', decision_note=? WHERE id=? AND status IN ('PENDING','APPROVED')",
+                        (reason, approval_id))
+        self._notify(approval_id)
+
     def invalidate_task(self, task_id: str, reason: str) -> None:
         rows = self.db.query("SELECT id FROM approvals WHERE task_id=? AND status IN ('PENDING','APPROVED')", (task_id,))
         for r in rows:
