@@ -112,3 +112,56 @@ def test_free_text_from_the_ui_starts_an_owner_task(web):
     assert len(task.request.attachments) == 1
     feed = client.get("/ui/api/messages", headers=OWNER).json()["messages"]
     assert feed[0]["role"] == "owner" and "[attached: notes.txt]" in feed[0]["text"]
+
+
+def test_assets_info_and_task_details(web):
+    coord, client = web
+    assert client.get("/ui/assets/app.js").headers["content-type"].startswith("text/javascript")
+    assert "--accent" in client.get("/ui/assets/app.css").text
+    assert client.get("/ui/assets/../api.py").status_code == 404
+    assert client.get("/ui/assets/secrets.txt").status_code == 404
+    assert client.get("/ui/api/info").status_code == 401
+    info = client.get("/ui/api/info", headers=OWNER).json()
+    assert info["roles"]["planning"]["route"] == "local" and info["browser_engine"] == "builtin"
+    client.post("/ui/api/messages", data={"text": "/research rooftop solar"}, headers=OWNER)
+    [task] = coord.tasks.list()
+    detail = client.get(f"/ui/api/tasks/{task.id[-6:]}", headers=OWNER).json()
+    assert detail["task_id"] == task.id and detail["spend"] == 0 and detail["currency"] == "INR"
+
+
+def test_owner_messages_are_threaded_under_their_task(web):
+    coord, client = web
+    r = client.post("/ui/api/messages", data={"text": "/research rooftop solar"}, headers=OWNER).json()
+    [task] = coord.tasks.list()
+    assert r["task_id"] == task.id
+    r2 = client.post("/ui/api/messages", data={"text": f"/status {task.id[-6:]}"}, headers=OWNER).json()
+    assert r2["task_id"] == task.id
+    owner = [m for m in client.get("/ui/api/messages", headers=OWNER).json()["messages"] if m["role"] == "owner"]
+    assert [m["task_id"] for m in owner] == [task.id, task.id]
+    r3 = client.post("/ui/api/messages", data={"text": "/budget"}, headers=OWNER).json()
+    assert r3["task_id"] is None
+
+
+async def test_long_poll_returns_as_soon_as_a_message_arrives(web):
+    import asyncio
+
+    import httpx
+
+    coord, _ = web
+    from omca.api import create_app
+
+    transport = httpx.ASGITransport(app=create_app(coord))
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+
+        async def later():
+            await asyncio.sleep(0.5)
+            coord.notifier.text("ping")
+            await coord.notifier.flush()
+
+        bg = asyncio.ensure_future(later())
+        r = await client.get("/ui/api/messages?after=0&wait=10", headers=OWNER)
+        await bg
+        assert [m["text"] for m in r.json()["messages"]] == ["ping"]
+        assert loop.time() - started < 3

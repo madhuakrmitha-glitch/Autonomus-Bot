@@ -71,6 +71,7 @@ limits:
 models:
   require_probes: true             # `omca models probe <route>` must pass before a route serves any role
   allow_fixture_routes: false
+  allow_closed_models: false       # owner opt-in: accept routes declared open_weights: false (closed models)
   roles:                           # every application-controlled role is routed explicitly
     planning: local-qwen35-9b
     vision: local-qwen35-9b
@@ -188,6 +189,15 @@ search:
 browser:
   screenshot_max_side_for_model: 1280
   max_page_text_chars: 20000
+  engine: builtin              # builtin (step loop, per-action approvals) | browser_use (Browser Use agent)
+  agent:                           # Browser Use, installed in its own virtualenv (see docs/browser-use.md)
+    python: ../.venv-browser-use/bin/python
+    model: vision                  # model gateway role (metered under the shared budget)
+    max_steps: 40
+    max_minutes: 15
+    max_actions_per_step: 4
+    use_vision: true
+    require_approval: true         # true: approve each Browser Use run once; false: runs without asking
   attachments:
     - id: vm1-edge
       worker_id: vm1

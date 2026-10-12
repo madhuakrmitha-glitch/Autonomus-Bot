@@ -537,6 +537,23 @@ def _sheet_write(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) ->
     return Classification(C.CREATE_OUTPUT, "writes a new workbook copy", destination=args.output_name)
 
 
+class BrowserAgentTaskArgs(_A):
+    goal: str = Field(max_length=8000)
+    start_url: str | None = Field(default=None, max_length=2048)
+    max_steps: int | None = Field(default=None, ge=1, le=200)
+
+
+def _browser_agent_task(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) -> Classification:
+    """One autonomous Browser Use run: its individual clicks are not seen by this gate."""
+    assert isinstance(args, BrowserAgentTaskArgs)
+    if ctx.config.browser.agent.require_approval:
+        return Classification(C.CONSEQUENTIAL, "autonomous Browser Use run", destination=args.start_url,
+                              consequence=f"Lets the Browser Use agent operate the authorized browser on its own "
+                                          f"(clicks, typing, form submissions) to: {args.goal[:300]}")
+    return Classification(C.NAVIGATION, "autonomous Browser Use run; the owner disabled approval "
+                                        "(browser.agent.require_approval: false)", destination=args.start_url)
+
+
 OPERATIONS: dict[str, OperationSpec] = {}
 
 
@@ -575,6 +592,8 @@ for _name, _args, _cls, _desc in [
                        retry_safe=_name in {"browser.observe", "browser.read_page", "browser.hit_test", "browser.wait",
                                             "browser.scroll", "browser.fetch_image", "browser.video_frames"},
                        description=_desc))
+_reg(OperationSpec("browser.agent_task", BrowserAgentTaskArgs, "worker", _browser_agent_task, capability="browser",
+                   needs_ui_lease=True, description="Run the Browser Use agent on a goal in the authorized browser"))
 # media (worker, no UI lease)
 _reg(OperationSpec("media.fetch", MediaFetchArgs, "worker", _retrieve, capability="video",
                    retry_safe=True, description="Download accessible media with yt-dlp"))

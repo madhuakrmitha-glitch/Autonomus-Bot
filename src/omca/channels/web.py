@@ -38,6 +38,11 @@ class WebInbox:
             )
             return int(cur.lastrowid)
 
+    def link_task(self, message_id: int, task_id: str) -> None:
+        """Thread an owner message under the task it created or addressed."""
+        self.db.execute("UPDATE web_messages SET task_id=?, rev=?, updated_at=? WHERE id=? AND task_id IS NULL",
+                        (task_id, self._next_rev(), now_iso(), message_id))
+
     def _target(self, ref: str) -> int | None:
         """Web message an edit refers to: an outbox id, or a channel message id recorded in an outbox result."""
         if ref.startswith("out_"):

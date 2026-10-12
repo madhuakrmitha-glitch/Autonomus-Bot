@@ -163,6 +163,44 @@ async def test_closed_or_unverified_routes_are_rejected(tmp_path):
         config_from_dict({"models": {"routes": [{"id": "f", **OPEN}]}})
 
 
+async def test_closed_models_need_the_owner_opt_in_and_an_honest_declaration(tmp_path):
+    register_fixture("oracle", probe_oracle)
+    closed = {**OPEN, "model": "x-ai/grok-4.7", "license": "proprietary", "open_weights": False}
+    routes = [{"id": "grok", **closed}, {"id": "mislabelled", **OPEN, "model": "x-ai/grok-4.7"}]
+    for allow in (False, True):
+        cfg = config_from_dict(base_config(tmp_path / str(allow), None, models={
+            "allow_fixture_routes": True, "allow_closed_models": allow, "require_probes": False,
+            "roles": {"planning": "grok", "vision": "mislabelled"}, "routes": routes}))
+        db = Database(cfg.storage.database_path)
+        reg = ModelRegistry(db, cfg, BudgetLedger(db, cfg))
+        problem = reg.open_model_problem(cfg.models.route("grok"))
+        assert (problem is None) == allow
+        # claiming open weights for a known closed model is refused even with the opt-in
+        assert "denylist" in reg.open_model_problem(cfg.models.route("mislabelled"))
+
+
+async def test_output_overrun_allowance_is_reserved_and_probed(tmp_path):
+    from omca.models.registry import route_digest
+
+    register_fixture("oracle", probe_oracle)
+    plain = {"id": "open", **OPEN}
+    _, _, reg0 = _router(tmp_path / "a", [plain], {"planning": "open"})
+    cfg, router, reg = _router(tmp_path / "b", [{**plain, "output_overrun_tokens": 300}], {"planning": "open"})
+    route = cfg.models.route("open")
+    # a zero allowance leaves existing probe results valid; a non-zero one needs a fresh probe
+    assert route_digest(reg0.config.models.route("open")) != route_digest(route)
+    assert route_digest(reg0.config.models.route("open")) == route_digest(
+        reg0.config.models.route("open").model_copy(update={"output_overrun_tokens": 0}))
+    results = await run_probes(router, reg, "open")
+    assert {r.probe: r for r in results}["bounded_output"].detail["allowed"] == 318
+    # reservations include the allowance on top of the requested cap
+    seen = []
+    orig = router.ledger.reserve
+    router.ledger.reserve = lambda r, est, **kw: (seen.append(est.max_output_tokens), orig(r, est, **kw))[1]
+    await router.call("planning", [{"role": "user", "content": "Reply with exactly: PONG"}], max_output_tokens=64)
+    assert seen == [364]
+
+
 @pytest.mark.acceptance("AT03")
 async def test_image_with_tools_and_continuation_probes(tmp_path):
     register_fixture("oracle", probe_oracle)

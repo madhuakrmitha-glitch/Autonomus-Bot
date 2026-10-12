@@ -83,6 +83,12 @@ pause/resume/cancel and the month's budget. `uv run omca ui` opens it signed in 
 passed in the URL fragment and kept in the browser's local storage). Every owner message is mirrored to the
 UI; when Telegram is not configured the UI is the delivery channel, and when it is, both receive messages.
 
+## Browser engines
+
+`/browse` runs on the built-in step loop (one model-chosen action at a time, each checked by the policy gate)
+or, with `browser.engine: browser_use`, on the [Browser Use](docs/browser-use.md) agent in its own virtualenv,
+which navigates real websites more reliably. Its model calls still go through the metered gateway.
+
 ## Owner commands (Telegram)
 
 `/research <topic>` · `/video <url> [question]` · `/browse <goal>` · `/office <goal>` · `/tasks` ·

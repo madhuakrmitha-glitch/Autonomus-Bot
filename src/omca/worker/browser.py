@@ -277,6 +277,23 @@ class BrowserManager:
         self._sessions[att.id] = sess
         return sess
 
+    async def release_session(self, attachment_id: str) -> None:
+        """Close this worker's browser for an attachment so another program can open its profile."""
+        sess = self._sessions.pop(attachment_id, None)
+        if sess is None:
+            return
+        try:
+            if sess.attachment.mode == "cdp":
+                for p in sess.pages.values():
+                    if not p.is_closed():
+                        await p.close()
+            elif sess.browser is not None:
+                await sess.browser.close()
+            else:
+                await sess.context.close()
+        except Exception:  # noqa: BLE001 - already closed
+            pass
+
     async def page(self, sess: BrowserSession, task_id: str):
         page = sess.pages.get(task_id)
         if page is None or page.is_closed():

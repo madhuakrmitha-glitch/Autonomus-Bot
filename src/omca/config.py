@@ -190,6 +190,10 @@ class ModelRoute(_Base):
     native_video: bool = False
     context_limit: int = 32768
     max_output_tokens: int = 4096
+    output_overrun_tokens: int = Field(
+        default=0, ge=0,
+        description="Output tokens a route may bill beyond max_output_tokens (e.g. hidden reasoning that ignores the "
+                    "cap); reserved on every call and allowed by the bounded-output probe")
     coordinate_system: Literal["normalized_1000", "pixels", "normalized_1"] = "normalized_1000"
     max_image_side: int = 1280
     image_patch_px: int = 28
@@ -245,6 +249,10 @@ class SpeechConfig(_Base):
 class ModelsConfig(_Base):
     require_probes: bool = True
     allow_fixture_routes: bool = False
+    allow_closed_models: bool = Field(
+        default=False,
+        description="Owner opt-in: also accept routes declared open_weights: false (closed or hosted-only models). "
+                    "Routes that claim open weights are still checked against the closed-model denylist.")
     roles: ModelRoles = Field(default_factory=ModelRoles)
     routes: list[ModelRoute] = Field(default_factory=list)
     speech: SpeechConfig = Field(default_factory=SpeechConfig)
@@ -343,10 +351,37 @@ class BrowserAttachment(_Base):
         return self
 
 
+class BrowserAgentConfig(_Base):
+    """Browser Use agent settings (``browser.engine: browser_use``)."""
+
+    python: str = Field(default="../.venv-browser-use/bin/python",
+                        description="Interpreter of the separate Browser Use virtualenv (relative to the config file)")
+    model: str = Field(default="vision", description="Model gateway role or route id the agent uses")
+    max_steps: int = Field(default=40, ge=1, le=200)
+    max_minutes: float = Field(default=15, gt=0)
+    max_actions_per_step: int = Field(default=4, ge=1, le=20)
+    max_output_tokens: int = 4096
+    use_vision: bool = True
+    require_approval: bool = Field(
+        default=True, description="Ask the owner once before each autonomous Browser Use run")
+    extra_instructions: str | None = None
+    gateway_url: str | None = Field(default=None, description="Standalone workers: coordinator model gateway, e.g. "
+                                                              "https://coordinator:8765/v1")
+    gateway_token_ref: str | None = Field(default=None, description="Standalone workers: model gateway token")
+
+    @field_validator("gateway_token_ref")
+    @classmethod
+    def _ref(cls, v: str | None) -> str | None:
+        return validate_ref(v, "browser.agent.gateway_token_ref")
+
+
 class BrowserConfig(_Base):
     attachments: list[BrowserAttachment] = Field(default_factory=list)
     screenshot_max_side_for_model: int = 1280
     max_page_text_chars: int = 20000
+    engine: Literal["builtin", "browser_use"] = Field(
+        default="builtin", description="builtin: step-by-step loop with per-action policy; browser_use: Browser Use agent")
+    agent: BrowserAgentConfig = Field(default_factory=BrowserAgentConfig)
 
 
 WorkerCapability = Literal["browser", "video", "document", "desktop", "spreadsheet", "email", "calendar"]
@@ -482,6 +517,11 @@ class ApplicationConfig(_Base):
         self.storage.data_dir = fix(self.storage.data_dir)  # type: ignore[assignment]
         self.storage.workspace_root = fix(self.storage.workspace_root)  # type: ignore[assignment]
         self.storage.reports_dir = fix(self.storage.reports_dir)
+        py = self.browser.agent.python
+        if "/" in py or "\\" in py:
+            # absolute but not symlink-resolved: a virtualenv's python is a symlink to the base interpreter
+            py = os.path.expandvars(os.path.expanduser(py))
+            self.browser.agent.python = py if os.path.isabs(py) else os.path.abspath(base / py)
         return self
 
 
@@ -529,6 +569,8 @@ class WorkerProcessConfig(_Base):
     ffprobe_path: str = "ffprobe"
     smtp: SmtpConfig | None = None
     allowed_download_extensions: list[str] = Field(default_factory=lambda: PolicyConfig().download_allowed_extensions)
+    browser_agent: BrowserAgentConfig | None = Field(
+        default=None, description="Browser Use agent (needs gateway_url and gateway_token_ref on standalone workers)")
 
     @field_validator("credential_ref")
     @classmethod
@@ -546,4 +588,8 @@ def load_worker_config(path: str | Path) -> WorkerProcessConfig:
     cfg.workspace_dir = Path(os.path.expandvars(str(cfg.workspace_dir))).expanduser()
     if not cfg.workspace_dir.is_absolute():
         cfg.workspace_dir = (path.parent / cfg.workspace_dir).resolve()
+    if cfg.browser_agent is not None:
+        py = Path(os.path.expandvars(cfg.browser_agent.python)).expanduser()
+        if not py.is_absolute() and ("/" in cfg.browser_agent.python or "\\" in cfg.browser_agent.python):
+            cfg.browser_agent.python = os.path.abspath(path.parent.absolute() / py)
     return cfg

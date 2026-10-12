@@ -195,7 +195,7 @@ class ModelRouter:
                                  f"request needs ~{text_tokens + image_tokens + max_tokens} tokens; "
                                  f"route {route.id} context is {route.context_limit}")
         est = CallEstimate(input_tokens=text_tokens, images=n_images, image_tokens=image_tokens,
-                           max_output_tokens=max_tokens)
+                           max_output_tokens=max_tokens + route.output_overrun_tokens)
         attempts = self.config.limits.max_retries_per_action + 1
         last: ProviderError | None = None
         for attempt in range(1, attempts + 1):

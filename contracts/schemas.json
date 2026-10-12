@@ -2856,6 +2856,55 @@
     }
   },
   "operations": {
+    "browser.agent_task": {
+      "description": "Run the Browser Use agent on a goal in the authorized browser",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "goal": {
+            "maxLength": 8000,
+            "title": "Goal",
+            "type": "string"
+          },
+          "start_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start Url"
+          },
+          "max_steps": {
+            "anyOf": [
+              {
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Steps"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "title": "BrowserAgentTaskArgs",
+        "type": "object"
+      }
+    },
     "browser.back": {
       "description": "Go back",
       "executor": "worker",

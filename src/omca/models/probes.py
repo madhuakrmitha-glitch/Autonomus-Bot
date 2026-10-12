@@ -152,8 +152,9 @@ async def run_probes(router: ModelRouter, registry: ModelRegistry, route_id: str
         r = await call([{"role": "user", "content": "Write a long essay about the history of printing."}],
                        max_output_tokens=16)
         out = (r.usage or {}).get("completion_tokens")
-        ok = (out is not None and out <= 18) or (out is None and len(r.text) <= 16 * 8)
-        return ok, {"completion_tokens": out, "finish_reason": r.finish_reason}
+        allowed = 18 + route.output_overrun_tokens
+        ok = (out is not None and out <= allowed) or (out is None and len(r.text) <= 16 * 8)
+        return ok, {"completion_tokens": out, "allowed": allowed, "finish_reason": r.finish_reason}
 
     async def p_usage():
         reported = [u for u in usages if u and u.get("prompt_tokens") is not None and u.get("completion_tokens") is not None]

@@ -2,368 +2,110 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>OMCA Assistant</title>
-<style>
-:root {
-  --bg: #f6f7f9; --panel: #ffffff; --border: #e3e6eb; --text: #1b1f24; --muted: #667085;
-  --accent: #2f6fde; --accent-text: #ffffff; --owner-bg: #2f6fde; --owner-text: #ffffff;
-  --bot-bg: #ffffff; --chip: #eef1f5; --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b;
-  --shadow: 0 1px 2px rgba(16,24,40,.06);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1115; --panel: #171a21; --border: #272b35; --text: #e6e8ec; --muted: #9aa3b2;
-    --accent: #5b8def; --accent-text: #0f1115; --owner-bg: #3a6fd8; --owner-text: #ffffff;
-    --bot-bg: #1d212a; --chip: #232833; --ok: #4cc283; --warn: #e0a84a; --bad: #ef6b5b;
-    --shadow: none;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0f1115; --panel: #171a21; --border: #272b35; --text: #e6e8ec; --muted: #9aa3b2;
-  --accent: #5b8def; --accent-text: #0f1115; --owner-bg: #3a6fd8; --owner-text: #ffffff;
-  --bot-bg: #1d212a; --chip: #232833; --ok: #4cc283; --warn: #e0a84a; --bad: #ef6b5b;
-  --shadow: none;
-}
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-button { font: inherit; cursor: pointer; }
-.app { display: grid; grid-template-columns: 300px 1fr; grid-template-rows: 52px 1fr; height: 100vh; }
-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 16px;
-  background: var(--panel); border-bottom: 1px solid var(--border); }
-header h1 { font-size: 15px; margin: 0; font-weight: 600; }
-header .spacer { flex: 1; }
-.pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
-.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
-aside { background: var(--panel); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px; }
-aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 4px 4px 8px; }
-.task { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 8px; background: var(--bg); }
-.task .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-.task .id { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); }
-.task .goal { margin: 4px 0 6px; overflow-wrap: anywhere; }
-.task .meta { font-size: 12px; color: var(--muted); }
-.badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--chip); }
-.badge.RUNNING, .badge.QUEUED, .badge.VERIFYING { color: var(--accent); }
-.badge.COMPLETED { color: var(--ok); }
-.badge.PARTIAL { color: var(--warn); }
-.badge.FAILED, .badge.CANCELLED { color: var(--bad); }
-.badge.AWAITING_APPROVAL, .badge.AWAITING_USER, .badge.PAUSED, .badge.BLOCKED { color: var(--warn); }
-.task .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; padding: 4px 10px; font-size: 12px; }
-.btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-.btn.danger { color: var(--bad); }
-main { display: flex; flex-direction: column; min-height: 0; }
-#feed { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; }
-.msg { max-width: min(760px, 85%); padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: var(--shadow); }
-.msg.owner { align-self: flex-end; background: var(--owner-bg); color: var(--owner-text); border-bottom-right-radius: 4px; }
-.msg.assistant { align-self: flex-start; background: var(--bot-bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-.msg .time { display: block; font-size: 11px; opacity: .65; margin-top: 4px; }
-.msg a { color: inherit; }
-.msg .buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.doc { display: flex; align-items: center; gap: 10px; }
-.doc .icon { width: 34px; height: 40px; border-radius: 6px; background: var(--chip); display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--accent); flex: none; }
-.empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
-.empty h2 { color: var(--text); font-size: 18px; margin-bottom: 6px; }
-.composer { border-top: 1px solid var(--border); background: var(--panel); padding: 10px 16px 14px; }
-.chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-.chip { border: 1px solid var(--border); background: var(--chip); color: var(--text); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
-.chip.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-.row { display: flex; gap: 8px; align-items: flex-end; }
-textarea { flex: 1; resize: none; min-height: 42px; max-height: 200px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); font: inherit; }
-textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.files { font-size: 12px; color: var(--muted); margin-top: 6px; }
-.icon-btn { height: 42px; min-width: 42px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
-.send { height: 42px; padding: 0 18px; border-radius: 10px; border: none; background: var(--accent); color: var(--accent-text); font-weight: 600; }
-.send:disabled { opacity: .5; cursor: default; }
-#login { position: fixed; inset: 0; background: var(--bg); display: none; place-items: center; padding: 16px; }
-#login .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: min(440px, 100%); }
-#login h2 { margin: 0 0 6px; font-size: 18px; }
-#login p { color: var(--muted); margin: 0 0 14px; }
-#login input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; margin-bottom: 12px; }
-#login code { background: var(--chip); padding: 1px 6px; border-radius: 6px; }
-.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
-.toast.show { opacity: .95; }
-#menu { display: none; }
-@media (max-width: 760px) {
-  .app { grid-template-columns: 1fr; }
-  aside { display: none; position: fixed; top: 52px; left: 0; right: 0; bottom: 0; z-index: 5; }
-  aside.open { display: block; }
-  #menu { display: inline-block; }
-  .msg { max-width: 92%; }
-}
-</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M9 16a7 7 0 1 0 14 0a7 7 0 1 0 -14 0' fill='none' stroke='white' stroke-width='2.6'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/ui/assets/app.css">
 </head>
 <body>
-<div class="app">
-  <header>
-    <button id="menu" class="btn" aria-label="Show tasks">Tasks</button>
-    <h1>OMCA Assistant</h1>
-    <span class="spacer"></span>
-    <span class="pill" id="budget" title="Model budget this month">Budget —</span>
-    <span class="pill"><span class="dot" id="conn"></span><span id="connText">connecting</span></span>
-    <button class="btn" id="theme" title="Toggle theme">Theme</button>
-  </header>
-  <aside id="sidebar">
-    <h2>Tasks</h2>
-    <div id="tasks"><div class="meta" style="color:var(--muted);padding:4px">No tasks yet.</div></div>
-  </aside>
-  <main>
-    <div id="feed"></div>
-    <div class="composer">
-      <div class="chips" id="chips"></div>
-      <div class="row">
-        <button class="icon-btn" id="attach" title="Attach files" aria-label="Attach files">+</button>
-        <input type="file" id="fileInput" multiple hidden>
-        <textarea id="input" rows="1" placeholder="Describe a task, or type /help"></textarea>
-        <button class="send" id="send">Send</button>
-      </div>
-      <div class="files" id="fileList"></div>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="Tasks">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div class="brand-text"><strong>OMCA</strong><span>Assistant</span></div>
+      <button class="icon-btn only-mobile" data-action="close-sidebar" aria-label="Close tasks" data-icon="x"></button>
     </div>
+    <button class="new-task" data-action="new-task"><span data-icon="plus"></span>New task<kbd class="kbd-hint">N</kbd></button>
+    <label class="search">
+      <span data-icon="search"></span>
+      <input id="taskSearch" type="search" placeholder="Search tasks" autocomplete="off" aria-label="Search tasks">
+    </label>
+    <div class="segmented" id="taskFilter" role="tablist" aria-label="Filter tasks">
+      <button role="tab" data-filter="all" aria-selected="true">All</button>
+      <button role="tab" data-filter="active">Active</button>
+      <button role="tab" data-filter="done">Done</button>
+    </div>
+    <nav class="task-list" id="taskList" aria-live="polite"></nav>
+    <div class="sidebar-foot">
+      <button class="budget" id="budget" data-action="budget" title="Model budget this month">
+        <div class="budget-row"><span>Budget</span><span id="budgetText">—</span></div>
+        <div class="meter"><div class="meter-fill" id="budgetFill"></div></div>
+      </button>
+      <div class="foot-actions">
+        <button class="icon-btn" data-action="palette" aria-label="Command palette (⌘K)" title="Command palette (⌘K)" data-icon="command"></button>
+        <button class="icon-btn" data-action="notifications" id="notifyBtn" aria-label="Notifications" title="Notifications" data-icon="bell"></button>
+        <button class="icon-btn" data-action="theme" id="themeBtn" aria-label="Theme" title="Theme" data-icon="monitor"></button>
+        <button class="icon-btn" data-action="settings" aria-label="About this assistant" title="About this assistant" data-icon="settings"></button>
+      </div>
+    </div>
+  </aside>
+  <div class="scrim" data-action="close-sidebar"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" data-action="open-sidebar" aria-label="Show tasks" data-icon="menu"></button>
+      <div class="topbar-title" id="topTitle">
+        <h1>Activity</h1>
+        <span class="sub">Everything the assistant is doing</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="conn" id="conn" title="Connection"><i></i><span>Connecting</span></span>
+        <button class="icon-btn" id="inspectorBtn" data-action="toggle-inspector" aria-label="Task details" title="Task details" data-icon="panel" hidden></button>
+      </div>
+    </header>
+
+    <section class="feed" id="feed" aria-live="polite" aria-label="Conversation"></section>
+    <button class="jump" id="jump" data-action="jump" hidden><span data-icon="arrow-down"></span>New messages</button>
+
+    <footer class="composer-wrap">
+      <div class="composer" id="composer">
+        <div class="reply-chip" id="replyChip" hidden></div>
+        <div class="attachments" id="attachments"></div>
+        <div class="slash-menu" id="slashMenu" role="listbox" hidden></div>
+        <textarea id="input" rows="1" placeholder="Describe a task…" aria-label="Message"></textarea>
+        <div class="composer-bar">
+          <div class="modes" id="modes" role="radiogroup" aria-label="Task type"></div>
+          <div class="composer-right">
+            <button class="icon-btn" data-action="attach" aria-label="Attach files" title="Attach files" data-icon="paperclip"></button>
+            <input type="file" id="fileInput" multiple hidden>
+            <button class="send" id="send" aria-label="Send" title="Send (Enter)" data-icon="send" disabled></button>
+          </div>
+        </div>
+      </div>
+      <div class="composer-hint"><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>/</kbd> commands · <kbd>⌘K</kbd> palette</div>
+    </footer>
+    <div class="dropzone" id="dropzone"><div><span data-icon="upload"></span>Drop files to attach</div></div>
   </main>
+
+  <aside class="inspector" id="inspector" aria-label="Task details" hidden></aside>
 </div>
-<div id="login">
-  <form class="card" id="loginForm">
-    <h2>Connect to OMCA</h2>
-    <p>Run <code>uv run omca ui</code> to open this page already signed in, or paste the owner API token
+
+<div class="overlay" id="palette" hidden>
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+    <label class="palette-search"><span data-icon="search"></span><input id="paletteInput" placeholder="Search tasks and commands…" autocomplete="off"></label>
+    <div class="palette-list" id="paletteList" role="listbox"></div>
+    <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> select</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+
+<div class="overlay" id="modal" hidden><div class="modal" role="dialog" aria-modal="true" id="modalBody"></div></div>
+
+<div class="overlay lightbox" id="lightbox" hidden data-action="close-lightbox"><img id="lightboxImg" alt=""></div>
+
+<div class="login" id="login" hidden>
+  <form class="login-card" id="loginForm">
+    <div class="logo big" aria-hidden="true"></div>
+    <h2>Connect to your assistant</h2>
+    <p>Run <code>uv run omca ui</code> to open this page signed in, or paste the owner token
       (<code>OMCA_OWNER_TOKEN</code> in <code>~/.openclaw/.env</code>).</p>
-    <input id="tokenInput" type="password" placeholder="Owner API token" autocomplete="off">
-    <button class="send" type="submit" style="width:100%">Connect</button>
+    <input id="tokenInput" type="password" placeholder="Owner token" autocomplete="off" aria-label="Owner token">
+    <button class="btn primary block" type="submit">Connect</button>
+    <p class="login-error" id="loginError" hidden>That token was not accepted.</p>
   </form>
 </div>
-<div class="toast" id="toast"></div>
-<script>
-(() => {
-  const KEY = "omca.ownerToken";
-  const store = {
-    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-    set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
-  };
-  let token = null;
-  function tokenFromHash() {
-    const t = new URLSearchParams(location.hash.slice(1)).get("token");
-    if (!t) return false;
-    store.set(KEY, t); token = t; history.replaceState(null, "", location.pathname);
-    return true;
-  }
-  tokenFromHash();
-  token = token || store.get(KEY);
 
-  const $ = (id) => document.getElementById(id);
-  const feed = $("feed"), input = $("input"), sendBtn = $("send");
-  const messages = new Map();
-  let rev = 0, files = [], mode = "", polling = false;
-
-  const theme = store.get("omca.theme");
-  if (theme) document.documentElement.dataset.theme = theme;
-  $("theme").onclick = () => {
-    const dark = document.documentElement.dataset.theme
-      ? document.documentElement.dataset.theme === "dark"
-      : matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "light" : "dark";
-    store.set("omca.theme", document.documentElement.dataset.theme);
-  };
-  $("menu").onclick = () => $("sidebar").classList.toggle("open");
-
-  function toast(text) {
-    const t = $("toast"); t.textContent = text; t.classList.add("show");
-    clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 3000);
-  }
-  function showLogin(show) { $("login").style.display = show ? "grid" : "none"; if (show) $("tokenInput").focus(); }
-  $("loginForm").onsubmit = (e) => {
-    e.preventDefault(); token = $("tokenInput").value.trim(); store.set(KEY, token); showLogin(false); poll(true);
-  };
-  function setConn(ok, text) { $("conn").className = "dot " + (ok ? "ok" : "bad"); $("connText").textContent = text; }
-
-  async function api(path, opts = {}) {
-    const res = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + token } });
-    if (res.status === 401) { showLogin(true); throw new Error("unauthorized"); }
-    if (!res.ok) { let d = res.statusText; try { d = (await res.json()).detail || d; } catch {} throw new Error(d); }
-    return res;
-  }
-
-  // -- conversation -------------------------------------------------------------------------------
-  const URL_RE = /(https?:\/\/[^\s<]+)/g;
-  function textNode(el, text) {
-    for (const part of text.split(URL_RE)) {
-      if (URL_RE.test(part)) {
-        const a = document.createElement("a"); a.href = part; a.textContent = part; a.target = "_blank"; a.rel = "noopener noreferrer";
-        el.appendChild(a);
-      } else if (part) el.appendChild(document.createTextNode(part));
-      URL_RE.lastIndex = 0;
-    }
-  }
-  function fmtTime(iso) {
-    const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" });
-  }
-  function render(m) {
-    let el = messages.get(m.id)?.el;
-    if (!el) { el = document.createElement("div"); feed.appendChild(el); }
-    el.className = "msg " + m.role; el.replaceChildren();
-    if (m.kind === "document") {
-      const d = document.createElement("div"); d.className = "doc";
-      const ic = document.createElement("div"); ic.className = "icon";
-      ic.textContent = (m.filename || "").split(".").pop().toUpperCase().slice(0, 4) || "FILE";
-      const info = document.createElement("div");
-      const b = document.createElement("button"); b.className = "btn"; b.textContent = "Download " + (m.filename || "file");
-      b.onclick = () => download(m);
-      info.appendChild(b);
-      if (m.text) { const c = document.createElement("div"); c.style.marginTop = "6px"; textNode(c, m.text); info.appendChild(c); }
-      d.append(ic, info); el.appendChild(d);
-    } else textNode(el, m.text);
-    if (m.buttons && m.buttons.length) {
-      const row = document.createElement("div"); row.className = "buttons";
-      for (const line of m.buttons) for (const [label, data] of line) {
-        const b = document.createElement("button");
-        b.className = "btn " + (/deny/i.test(label) ? "danger" : "primary"); b.textContent = label;
-        b.onclick = () => press(data, row);
-        row.appendChild(b);
-      }
-      el.appendChild(row);
-    }
-    const t = document.createElement("span"); t.className = "time"; t.textContent = fmtTime(m.updated_at || m.created_at);
-    el.appendChild(t);
-    messages.set(m.id, { ...m, el });
-  }
-  function emptyState() {
-    if (messages.size) { feed.querySelector(".empty")?.remove(); return; }
-    if (feed.querySelector(".empty")) return;
-    feed.innerHTML = '<div class="empty"><h2>What should I work on?</h2>' +
-      '<p>Describe a task in plain words, or pick a mode below: research a topic into a cited Word report, ' +
-      'analyse a video, operate the browser, or run an office workflow. Approvals will appear here as buttons.</p></div>';
-  }
-  async function download(m) {
-    try {
-      const res = await api("/ui/api/files/" + m.id);
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement("a"); a.href = url; a.download = m.filename || "file"; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e) { toast("Download failed: " + e.message); }
-  }
-  async function press(data, row) {
-    row.querySelectorAll("button").forEach(b => b.disabled = true);
-    try {
-      const r = await (await api("/ui/api/callback", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data }) })).json();
-      if (r.reply) toast(r.reply);
-      poll(true);
-    } catch (e) { toast(e.message); row.querySelectorAll("button").forEach(b => b.disabled = false); }
-  }
-
-  async function poll(force) {
-    if (!token) { showLogin(true); return; }
-    if (polling && !force) return;
-    polling = true;
-    try {
-      const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
-      const data = await (await api("/ui/api/messages?after=" + rev)).json();
-      for (const m of data.messages) render(m);
-      const grew = data.messages.length > 0;
-      rev = Math.max(rev, data.rev);
-      emptyState();
-      if (grew && (nearBottom || force)) feed.scrollTop = feed.scrollHeight;
-      setConn(true, "connected");
-    } catch (e) { if (e.message !== "unauthorized") setConn(false, "offline"); }
-    finally { polling = false; }
-  }
-
-  // -- tasks and budget ---------------------------------------------------------------------------
-  const ACTIVE = new Set(["QUEUED", "RUNNING", "AWAITING_APPROVAL", "AWAITING_USER", "BLOCKED", "VERIFYING"]);
-  async function refreshSide() {
-    if (!token) return;
-    try {
-      const tasks = await (await api("/tasks?limit=30")).json();
-      const box = $("tasks"); box.replaceChildren();
-      if (!tasks.length) { box.innerHTML = '<div class="meta" style="color:var(--muted);padding:4px">No tasks yet.</div>'; }
-      for (const t of tasks) {
-        const short = t.task_id.slice(-6);
-        const el = document.createElement("div"); el.className = "task";
-        const top = document.createElement("div"); top.className = "top";
-        const id = document.createElement("span"); id.className = "id"; id.textContent = short + " · " + t.workflow.replace(/_/g, " ");
-        const badge = document.createElement("span"); badge.className = "badge " + t.status; badge.textContent = t.status.toLowerCase().replace(/_/g, " ");
-        top.append(id, badge);
-        const goal = document.createElement("div"); goal.className = "goal"; goal.textContent = t.goal.length > 140 ? t.goal.slice(0, 140) + "…" : t.goal;
-        const meta = document.createElement("div"); meta.className = "meta";
-        meta.textContent = [t.phase, t.blocking_reason].filter(Boolean).join(" · ") || fmtTime(t.updated_at);
-        const actions = document.createElement("div"); actions.className = "actions";
-        const act = (label, fn, cls = "") => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = fn; actions.appendChild(b); };
-        act("Status", () => sendText("/status " + short));
-        if (ACTIVE.has(t.status)) {
-          act("Pause", () => taskAction(short, "pause"));
-          act("Steer", () => { input.value = "/steer " + short + " "; input.focus(); });
-          act("Cancel", () => { if (confirm("Cancel task " + short + "?")) taskAction(short, "cancel"); }, "danger");
-        }
-        if (t.status === "AWAITING_USER") act("Answer", () => { input.value = "/answer " + short + " "; input.focus(); }, "primary");
-        if (t.status === "PAUSED") act("Resume", () => taskAction(short, "resume"), "primary");
-        for (const a of t.artifacts || []) act("⤓ " + a.name, () => artifact(a));
-        el.append(top, goal, meta, actions); box.appendChild(el);
-      }
-      const b = await (await api("/budget")).json();
-      $("budget").textContent = `Budget ${(b.ceiling - b.remaining).toFixed(2)} / ${b.ceiling.toFixed(0)} ${b.currency}`;
-    } catch {}
-  }
-  async function taskAction(id, action) {
-    try { await api(`/tasks/${id}/${action}`, { method: "POST" }); refreshSide(); poll(true); }
-    catch (e) { toast(e.message); }
-  }
-  async function artifact(a) {
-    try {
-      const url = URL.createObjectURL(await (await api("/artifacts/" + a.artifact_id)).blob());
-      const el = document.createElement("a"); el.href = url; el.download = a.name; el.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e) { toast("Download failed: " + e.message); }
-  }
-
-  // -- composer -----------------------------------------------------------------------------------
-  const MODES = [
-    ["", "Auto", "Describe a task, or type /help"],
-    ["/research ", "Research", "Topic to research into a cited Word report"],
-    ["/video ", "Video", "Video URL, then an optional question"],
-    ["/browse ", "Browse", "What to do in the browser"],
-    ["/office ", "Office", "Spreadsheet, email or calendar goal"],
-  ];
-  const chips = $("chips");
-  for (const [prefix, label, hint] of MODES) {
-    const c = document.createElement("button"); c.className = "chip" + (prefix === mode ? " active" : ""); c.textContent = label;
-    c.onclick = () => { mode = prefix; input.placeholder = hint; chips.querySelectorAll(".chip").forEach(x => x.classList.toggle("active", x === c)); input.focus(); };
-    chips.appendChild(c);
-  }
-  for (const cmd of ["/tasks", "/budget", "/schedules", "/help"]) {
-    const c = document.createElement("button"); c.className = "chip"; c.textContent = cmd; c.onclick = () => sendText(cmd);
-    chips.appendChild(c);
-  }
-  $("attach").onclick = () => $("fileInput").click();
-  $("fileInput").onchange = (e) => { files = [...e.target.files]; $("fileList").textContent = files.map(f => f.name).join(", "); };
-  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
-  sendBtn.onclick = submit;
-
-  function submit() {
-    const raw = input.value.trim();
-    if (!raw && !files.length) return;
-    const text = raw.startsWith("/") || !mode ? raw : mode + raw;
-    sendText(text, files);
-  }
-  async function sendText(text, attach = []) {
-    const fd = new FormData(); fd.append("text", text); for (const f of attach) fd.append("files", f, f.name);
-    sendBtn.disabled = true;
-    try {
-      await api("/ui/api/messages", { method: "POST", body: fd });
-      input.value = ""; input.style.height = "auto"; files = []; $("fileInput").value = ""; $("fileList").textContent = "";
-      await poll(true); refreshSide();
-    } catch (e) { toast("Not sent: " + e.message); }
-    finally { sendBtn.disabled = false; input.focus(); }
-  }
-
-  addEventListener("hashchange", () => { if (tokenFromHash()) { showLogin(false); poll(true); refreshSide(); } });
-  if (!token) showLogin(true);
-  poll(true); refreshSide();
-  setInterval(poll, 1500);
-  setInterval(refreshSide, 4000);
-})();
-</script>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="/ui/assets/app.js"></script>
 </body>
 </html>
