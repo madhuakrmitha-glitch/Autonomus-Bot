@@ -166,7 +166,7 @@ console with `tscon <id> /dest:console` instead of closing the window.
 |---|---|
 | Probes pass, closed routes blocked | `omca models probe <route>`; `omca models list` shows any closed/unpriced route as unusable |
 | Only the owner reaches the assistant | Message from another account → no reply, audited |
-| Deterministic suite three times | `uv run omca fixtures --repeat 3` → `data\fixture-results\<stamp>\summary.json` |
+| Deterministic suite three times | `uv run omca fixtures --repeat 3` → `data\fixture-results\<stamp>\summary.json` (the development record is in `docs/release/`; keep yours alongside it) |
 | Live smoke | One real research task per selected search provider; compare report claims against sources |
 | Recovery demonstration | Start a `/browse` task that needs approval, approve it, stop the coordinator mid-task, restart: the action is not repeated and the task resumes or asks you |
 

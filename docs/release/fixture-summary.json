@@ -1,0 +1,788 @@
+{
+  "started": "20261012T145331Z",
+  "repeat": 3,
+  "all_passed": true,
+  "flaky_cases": [],
+  "versions": {
+    "python": "3.13.16",
+    "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+    "omca": "0.1.0",
+    "playwright": "1.56.0",
+    "python-docx": "1.2.0",
+    "httpx": "0.28.1",
+    "yt-dlp": "2026.8.19",
+    "faster-whisper": "1.2.1",
+    "mcp": "2.3.0",
+    "fastapi": "0.143.0",
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+    "git": "858ac240b2ad82895b46c2fcc3e71912f2654e50"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "exit_code": 0,
+      "passed": 148,
+      "failed": 0,
+      "skipped": 0,
+      "report_sha256": "86b5ed6445f3807ab9ecb82547273b87747052928595e605313474ee77e186a3"
+    },
+    {
+      "run": 2,
+      "exit_code": 0,
+      "passed": 148,
+      "failed": 0,
+      "skipped": 0,
+      "report_sha256": "e946b6f6d3ffb38eadd6d53947d5c056b02c30651273edf2ed9da34979815f60"
+    },
+    {
+      "run": 3,
+      "exit_code": 0,
+      "passed": 148,
+      "failed": 0,
+      "skipped": 0,
+      "report_sha256": "f58d6607ed7bd499c1336d166ad583299e867b9d2ed8b87fcaf3a9c0d541899d"
+    }
+  ],
+  "cases": {
+    "tests.test_api::test_contract_files_match_the_code": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_api::test_example_configuration_is_valid_and_activates_nothing": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_api::test_literal_secrets_are_rejected": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_api::test_mcp_server_exposes_only_task_tools": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_api::test_model_gateway_is_allowlisted_and_metered": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_api::test_openclaw_bridge_uses_the_verified_sender": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_api::test_owner_routes_require_the_owner_token": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_approved_send_executes_exactly_once": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_authorized_session_reused_and_unrelated_profile_untouched": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_canvas_click_without_rule_requires_approval": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_canvas_target_with_resized_screenshot[1.0]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_canvas_target_with_resized_screenshot[2.0]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_changed_target_state_invalidates_approval": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_consequential_actions_wait_for_a_decision[step0]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_consequential_actions_wait_for_a_decision[step1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_consequential_actions_wait_for_a_decision[step2]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_consequential_actions_wait_for_a_decision[step3]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_consequential_actions_wait_for_a_decision[step4]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_expired_approval_and_wrong_owner_are_refused": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_fixture_site_files_present": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_stale_reference_is_refused": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_browser::test_structured_navigation_with_waits_and_fresh_refs": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_closed_or_unverified_routes_are_rejected": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_concurrent_router_calls_and_unknown_usage_are_conservative": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_direct_mode_poller_accepts_only_owner_private_chats": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_firecrawl_never_requests_supplier_ai_formats": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_image_with_tools_and_continuation_probes": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_page_injection_cannot_change_routes_permissions_or_recipients": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_pairing_binds_a_single_owner": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_simultaneous_reservations_never_exceed_shared_capacity": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_two_search_adapters_same_contract_same_task_logic": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_controls::test_unknown_identity_cannot_create_or_approve": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_http_worker::test_remote_worker_over_http": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_dotenv_secret_references": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_init_writes_macos_defaults": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_key_chords_map_per_platform": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_launch_agent_runs_in_the_gui_session[all-in-one-tail0]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_launch_agent_runs_in_the_gui_session[coordinator-tail1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_launch_agent_runs_in_the_gui_session[worker-tail2]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_raw_desktop_input_is_unavailable_on_linux": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_platforms::test_windows_example_is_unchanged": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_cancel_reports_completed_effects_and_never_completes": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_desktop_office_workflow_confirms_consequential_changes": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_pause_during_approval_wait_then_cancel": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_pause_stops_new_actions_and_resume_continues": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_progress_heartbeat_and_state_change_notifications": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_restart_does_not_repeat_a_completed_send": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_recovery::test_unknown_outcome_is_reconciled_with_the_owner_not_repeated": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_research_workflow::test_chart_values_confirmed_and_unreadable_not_invented": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_research_workflow::test_invented_number_is_flagged": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_research_workflow::test_word_report_end_to_end": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_a_call_costing_more_than_its_reservation_is_flagged": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_ambiguous_urls_are_refused[ftp://example.com/]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_ambiguous_urls_are_refused[http://evil.example\\\\@127.0.0.1/]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_ambiguous_urls_are_refused[http://exa mple.com/]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_ambiguous_urls_are_refused[http://example.com:99999/]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_ambiguous_urls_are_refused[http://user:pw@example.com/]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_approval_is_bound_to_the_page_url": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_approved_key_press_is_refused_when_focus_moved": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_browser_task_pages_cannot_reach_unapproved_private_hosts": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_cancel_interrupts_claimed_read_only_jobs_but_lets_mutations_finish": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_email_inputs_must_belong_to_the_task_and_the_preview_shows_the_message": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_email_send_refuses_unapproved_header_recipients[extra0]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_email_send_refuses_unapproved_header_recipients[extra1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_email_send_refuses_unapproved_header_recipients[extra2]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_failed_resume_or_pause_keeps_the_session_counting": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_maintenance_retries_the_pause_and_settles_only_after_it_works": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_names_that_resolve_to_private_addresses_are_refused": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_navigation_classifier_uses_the_same_host_rules": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_never_started_is_trusted_only_from_the_claiming_process": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[0.0.0.0]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[017700000001]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[0x7f.0.0.1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[100.64.0.1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[127.1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[169.254.169.254]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[2130706433]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[::1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[::ffff:127.0.0.1]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[[fd00::1]]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[localhost.]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[nas.home.arpa]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[printer.localhost]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_private_hosts_in_any_spelling[router]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_public_hosts[2606:4700:4700::1111]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_public_hosts[8.8.8.8]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_public_hosts[cafe.be]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_public_hosts[example.com]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_read_only_actions_run_again_under_a_new_job_but_effects_never_repeat": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_retrieval_checks_every_redirect_hop": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_same_page_links_and_cookie_image_fetches_stay_possible_mutations": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_standing_rule_paths_cannot_escape_and_names_alone_do_not_scope": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_superseded_worker_process_fences_itself": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_token_estimate_covers_non_latin_text_and_message_overhead": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_uncertain_coordinator_effect_is_reconciled_with_the_owner[DISPATCHED]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_uncertain_coordinator_effect_is_reconciled_with_the_owner[UNKNOWN]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_review_regressions::test_worker_refuses_a_press_or_point_click_on_a_different_target": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_schedules::test_cron_evaluates_in_the_schedule_timezone": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_schedules::test_cron_rejects_invalid_expressions": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_schedules::test_cron_skips_nonexistent_dst_times": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_schedules::test_run_latest_policy_fires_only_the_latest_missed_run": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_schedules::test_scheduled_research_timezone_dedup_overlap_and_restart": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_traceability::test_every_acceptance_case_has_a_marked_test": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_traceability::test_every_functional_requirement_is_traced": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_approval_binding_rejects_every_kind_of_change": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_artifacts_are_confined_typed_and_checksummed": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element0-NAVIGATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element1-CONSEQUENTIAL]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element10-UNKNOWN_MUTATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element2-CONSEQUENTIAL]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element3-CONSEQUENTIAL]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element4-CONSEQUENTIAL]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element5-NAVIGATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element6-UNKNOWN_MUTATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element7-NAVIGATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element8-DRAFT]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_click_classification[element9-UNKNOWN_MUTATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_endpoint_window_pauses_and_settles": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_excerpt_location_and_numbers": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[Control+Enter-None-CONSEQUENTIAL]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[Control+c-None-READ]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[Delete-None-UNKNOWN_MUTATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[Enter-focus1-CONSEQUENTIAL]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[Enter-focus2-NAVIGATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[PageDown-None-NAVIGATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[a-focus6-FORBIDDEN]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[e-None-UNKNOWN_MUTATION]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_keyboard_classification[e-focus5-DRAFT]": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_policy_denials_and_staleness": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_report_validation_detects_missing_claims_and_bad_citations": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_standing_rules_are_narrow": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_time_billed_endpoint_sessions_are_reserved_and_settled": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_units::test_unpriced_hosted_routes_stay_disabled": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_brief_event_triggers_denser_inspection": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_caption_parsing_merges_rolling_duplicates": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_inaccessible_media_returns_a_truthful_failure": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_long_video_is_segmented_and_bounded": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_sampling_plans_are_bounded": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_silent_demonstration_does_not_claim_narration": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_video::test_spoken_video_frames_and_transcript_support_timestamped_findings": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_heartbeat_marks_offline_and_routing_skips_dead_workers": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_receipt_wait_times_out_to_unknown_only_after_a_claim": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_routing_and_declared_artifact_transfer_over_http": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_stale_worker_cannot_act_and_late_receipts_are_flagged": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_two_browser_tasks_never_interleave_on_one_desktop": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_ui_lease_is_exclusive_and_fencing_tokens_increase": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_worker_receipt_cache_makes_execution_idempotent": [
+      "passed",
+      "passed",
+      "passed"
+    ],
+    "tests.test_workers::test_worker_that_lost_contact_stops_acting": [
+      "passed",
+      "passed",
+      "passed"
+    ]
+  }
+}
