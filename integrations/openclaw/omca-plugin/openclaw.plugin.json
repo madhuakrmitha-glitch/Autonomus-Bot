@@ -1,0 +1,18 @@
+{
+  "id": "omca",
+  "name": "OMCA coordinator bridge",
+  "description": "Forwards owner commands and approval buttons to the OMCA coordinator and blocks every tool outside the omca__* MCP tools.",
+  "version": "0.1.0",
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "sidecarUrl": { "type": "string", "description": "Coordinator base URL, e.g. http://127.0.0.1:8765" },
+      "bridgeToken": { "type": "string", "description": "Bridge token; use ${OMCA_BRIDGE_TOKEN} substitution, never a literal" },
+      "toolPrefix": { "type": "string", "default": "omca__" },
+      "allowTools": { "type": "array", "items": { "type": "string" }, "description": "Extra tool ids allowed (default none)" },
+      "timeoutMs": { "type": "number", "default": 15000 }
+    }
+  }
+}

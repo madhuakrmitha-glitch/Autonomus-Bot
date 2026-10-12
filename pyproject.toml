@@ -1,0 +1,72 @@
+[project]
+name = "omca"
+version = "0.1.0"
+description = "Open Model Computer Assistant: a single-owner Telegram assistant that researches, analyses media and operates Windows tools through open-weight models and bounded, approval-gated execution."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary - single owner" }
+dependencies = [
+  "pydantic>=2.7,<3",
+  "pyyaml>=6.0",
+  "httpx>=0.27,<1",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "python-multipart>=0.0.9",
+  "python-docx>=1.1",
+  "pillow>=10.4",
+  "jsonschema>=4.22",
+  "keyring>=25",
+  "openpyxl>=3.1",
+  "tzdata>=2024.1; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+browser = ["playwright==1.56.0"]
+video = ["yt-dlp>=2025.1.1", "faster-whisper>=1.1"]
+mcp = ["mcp>=2.3,<3"]
+desktop = ["pywinauto>=0.6.9; sys_platform == 'win32'"]
+all = ["omca[browser,video,mcp,desktop]"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+omca = "omca.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/omca"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"contracts" = "omca/_contracts"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "live: uses real external services (Telegram, model endpoints, search APIs); skipped unless OMCA_LIVE=1",
+  "browser: needs Playwright and a Chromium build",
+  "video: needs ffmpeg and yt-dlp",
+  "acceptance(case): maps the test to an acceptance case id from tests/acceptance_cases.json",
+]
+filterwarnings = ["ignore::DeprecationWarning:websockets.*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC"]
+ignore = ["E501", "B008", "UP042", "ASYNC109"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ASYNC240", "ASYNC251"]

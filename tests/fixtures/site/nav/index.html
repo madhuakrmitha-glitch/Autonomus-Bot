@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><title>Acme Phone X - Product page</title>
+<style>body{font-family:sans-serif;margin:40px} #details{margin-top:20px} .hidden{display:none}</style></head>
+<body>
+<h1>Acme Phone X</h1>
+<p>A fixture page whose content changes after interaction.</p>
+<button id="toggle" aria-expanded="false" aria-controls="details">Show details</button>
+<div id="details" class="hidden"></div>
+<script>
+  const btn = document.getElementById("toggle");
+  btn.addEventListener("click", () => {
+    btn.setAttribute("aria-expanded", "true");
+    setTimeout(() => {
+      const d = document.getElementById("details");
+      d.classList.remove("hidden");
+      d.innerHTML = '<p>Loaded details.</p><a id="specs" href="/nav/specs.html">Specifications</a>';
+    }, 400);
+  });
+</script>
+</body></html>

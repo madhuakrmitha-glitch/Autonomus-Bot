@@ -1,0 +1,253 @@
+# Open Model Computer Assistant - normative default inventory (spec section 19).
+#
+# Copy to config/application.yaml (`omca init`) and fill the operator values marked REQUIRED.
+# This is application configuration, not an OpenClaw config: `omca openclaw config` translates
+# the framework parts. Every secret is a reference (env:NAME, keyring:SERVICE/USER, file:PATH);
+# literal secrets are rejected. Placeholders never activate a hosted route: a route is usable
+# only when enabled, priced with a recorded source/date, FX-convertible and probe-verified.
+version: 1
+
+owner:
+  name: owner
+  telegram_user_ids: []            # REQUIRED: the owner's numeric Telegram id (or pair with `omca telegram pair`)
+  approver_user_ids: null          # defaults to the owner allowlist
+  display_timezone: Asia/Kolkata   # owner-configurable; machine timestamps are always UTC
+
+telegram:
+  mode: openclaw                   # openclaw (recommended) | direct (coordinator polls the Bot API) | disabled
+  bot_token_ref: keyring:omca/telegram-bot-token   # REQUIRED: outbound delivery uses the Bot API in both modes
+  api_base: https://api.telegram.org
+  poll_timeout_seconds: 30         # direct mode only
+  pairing_code_ttl_seconds: 600
+  openclaw:
+    bridge_token_ref: keyring:omca/openclaw-bridge-token   # shared with the OpenClaw plugin (OMCA_BRIDGE_TOKEN)
+
+server:
+  host: 127.0.0.1                  # keep private; use TLS when workers connect from other VMs
+  port: 8765
+  public_base_url: null            # e.g. https://coordinator.vm.lan:8765 for remote workers
+  tls_cert_file: null
+  tls_key_file: null
+  owner_api_token_ref: keyring:omca/owner-api-token          # MCP sidecar and owner API (OMCA_OWNER_TOKEN)
+  model_gateway_token_ref: keyring:omca/model-gateway-token  # OpenClaw custom provider (OMCA_MODEL_GATEWAY_TOKEN)
+  approval_signing_key_ref: null   # null: a key is generated under data/secrets on first run
+
+storage:
+  data_dir: ../data                # SQLite database, worker cache, generated signing key
+  workspace_root: ../workspace     # tasks/<task-id>/{inputs,observations,evidence,media,reports,outputs}
+  reports_dir: null                # owner-visible report folder; defaults to <workspace_root>/reports
+
+retention:                         # proposed defaults; reports and source manifests are kept until deleted
+  observation_days: 7              # transient screenshots
+  media_days: 7                    # extracted frames and downloaded media
+  action_log_days: 90
+  usage_ledger_months: 12
+
+budget:
+  currency: INR
+  monthly_ceiling: 2000            # shared paid model inference across workers and roles (Asia/Kolkata months)
+  period_timezone: Asia/Kolkata
+  per_task_reservation_ceiling: 50
+  warning_thresholds: [0.7, 0.9]
+  reserve_margin: 0.25             # conservative buffer added to every reservation
+  fx:
+    USD: {rate: null, source: null, effective_date: null}   # REQUIRED before any USD-priced hosted route works
+
+limits:
+  max_actions_per_task: 40
+  max_retries_per_action: 2
+  max_task_active_minutes: 20      # excluding owner waits
+  approval_expiry_minutes: 15
+  observation_max_age_seconds: 30
+  progress_interval_seconds: 60
+  worker_heartbeat_seconds: 15
+  lease_ttl_seconds: 60
+  max_concurrent_tasks: 4
+  owner_input_timeout_hours: 24
+
+models:
+  require_probes: true             # `omca models probe <route>` must pass before a route serves any role
+  allow_fixture_routes: false
+  roles:                           # every application-controlled role is routed explicitly
+    planning: local-qwen35-9b
+    vision: local-qwen35-9b
+    summarisation: local-qwen35-9b
+    review: local-qwen35-9b
+    embeddings: null               # not used initially (no vector database)
+    fallbacks:
+      planning: [deepinfra-qwen35-35b]
+      vision: [deepinfra-qwen35-35b]
+      summarisation: [deepinfra-qwen35-35b]
+  speech:
+    engine: faster-whisper
+    model: small                   # or a local path to a pre-downloaded CTranslate2 model
+    license: mit
+    weights_url: https://huggingface.co/Systran/faster-whisper-small
+    device: auto
+    compute_type: int8
+  routes:
+    - id: local-qwen35-9b          # local model service (S13, S18); one server shared by all VMs
+      provider: ollama
+      base_url: http://127.0.0.1:11434/v1      # REQUIRED: authenticated private route to the model host
+      model: qwen3.5:9b
+      revision: null               # record the exact tag/digest you pulled
+      license: apache-2.0          # verify on the model card before enabling
+      license_url: https://huggingface.co/Qwen/Qwen3.5-9B
+      weights_url: https://huggingface.co/Qwen/Qwen3.5-9B
+      open_weights: true
+      modalities: [text, image]
+      supports_tools: true
+      supports_streaming: true
+      native_video: false
+      context_limit: 32768         # choose from measurements on the selected hardware
+      max_output_tokens: 4096
+      coordinate_system: normalized_1000   # how the model reports click_point coordinates
+      max_image_side: 1280
+      billing: none                # no per-token charge (still consumes hardware)
+      auth_ref: null
+      enabled: false               # enable after `omca models probe local-qwen35-9b` passes
+      extra_body: {}
+    - id: deepinfra-qwen35-35b     # hosted OpenAI-compatible API (S17)
+      provider: openai_compatible
+      base_url: https://api.deepinfra.com/v1/openai
+      model: Qwen/Qwen3.5-35B-A3B
+      revision: null
+      license: apache-2.0          # verify on the model card before enabling
+      license_url: https://huggingface.co/Qwen/Qwen3.5-35B-A3B
+      weights_url: https://huggingface.co/Qwen/Qwen3.5-35B-A3B
+      open_weights: true
+      modalities: [text, image]
+      supports_tools: true
+      context_limit: 65536
+      max_output_tokens: 4096
+      coordinate_system: normalized_1000
+      max_image_side: 1280
+      billing: tokens
+      pricing:                     # REQUIRED before use; record where and when prices were read
+        currency: USD
+        input_per_million: null
+        output_per_million: null
+        image_per_unit: null
+        source: null
+        effective_date: null
+      auth_ref: keyring:omca/deepinfra-api-key
+      enabled: false
+      extra_body: {}
+    - id: hf-router-qwen35-35b     # Hugging Face Inference Providers (S20); confirm image+tool support per provider
+      provider: hf_inference_providers
+      base_url: https://router.huggingface.co/v1
+      model: Qwen/Qwen3.5-35B-A3B
+      license: apache-2.0
+      open_weights: true
+      modalities: [text, image]
+      billing: tokens
+      pricing: {currency: USD, input_per_million: null, output_per_million: null, source: null, effective_date: null}
+      auth_ref: keyring:omca/hf-token
+      enabled: false
+    - id: hf-dedicated-qwen35      # dedicated endpoint (S19): hardware-time billing with pause control
+      provider: hf_dedicated_endpoint
+      base_url: https://YOUR-ENDPOINT.endpoints.huggingface.cloud/v1
+      model: tgi
+      license: apache-2.0
+      open_weights: true
+      modalities: [text, image]
+      billing: time
+      pricing: {currency: USD, per_hour: null, source: null, effective_date: null}
+      auth_ref: keyring:omca/hf-token
+      dedicated:
+        controller: huggingface
+        namespace: null
+        name: null
+        api_token_ref: keyring:omca/hf-token
+        max_session_hours: 1
+        initialization_minutes: 10
+      enabled: false
+
+search:
+  adapter: firecrawl               # firecrawl | searxng (swap without changing research logic)
+  retrieval_adapter: firecrawl     # firecrawl | http (plain fetch); browser fallback is automatic
+  firecrawl:
+    base_url: https://api.firecrawl.dev
+    api_key_ref: keyring:omca/firecrawl-api-key   # separate spending limit from the model budget
+    api_version: v2
+  searxng:
+    base_url: null                 # e.g. http://127.0.0.1:8888 for a self-hosted instance
+  http:
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OMCA-research/0.1"
+  max_results_per_query: 8
+  max_queries_per_task: 4
+  max_pages_per_task: 6
+  prefer_domains: []               # primary sources to rank first, e.g. [mnre.gov.in]
+  demote_domains: []
+  block_domains: []
+  allowed_private_hosts: []        # intranet hosts research may fetch
+
+browser:
+  screenshot_max_side_for_model: 1280
+  max_page_text_chars: 20000
+  attachments:
+    - id: vm1-edge
+      worker_id: vm1
+      mode: persistent_profile     # worker launches Edge with its own dedicated profile; log in once by hand
+      channel: msedge
+      user_data_dir: C:/OMCA/profiles/vm1-edge
+      headless: false
+      authorized: false            # REQUIRED: the owner sets true to authorize this session explicitly
+      allowed_private_origins: []
+    # Attach to an owner-started browser instead (dedicated profile, loopback only):
+    #   msedge.exe --remote-debugging-port=9222 --user-data-dir=C:\OMCA\profiles\attach
+    # - {id: vm1-attach, worker_id: vm1, mode: cdp, cdp_url: http://127.0.0.1:9222, authorized: false}
+
+workers:
+  - id: vm1
+    display_name: Windows VM one
+    credential_ref: keyring:omca/worker-vm1   # same secret configured in that VM's worker.yaml
+    capabilities: [browser, video, document, spreadsheet, email, calendar]
+    enabled: true
+  # P3: add vm2 only after P1 passes
+  # - {id: vm2, credential_ref: keyring:omca/worker-vm2, capabilities: [browser, spreadsheet], enabled: true}
+
+policy:
+  contacts: []                     # recipients sends/invites may target, e.g. {name: Asha, kind: email, address: asha@example.com}
+  standing_rules: []               # narrow pre-authorizations; each needs an origin, recipient, path or element pattern
+  # - id: docs-cookie-banner
+  #   description: Dismiss the cookie banner on the docs site
+  #   operation: browser.click
+  #   origin: https://docs.example.com
+  #   element_name_pattern: "Accept( all)? cookies"
+  #   expires_at: 2026-12-31T00:00:00Z
+  #   max_uses: 50
+  download_allowed_extensions: [.pdf, .png, .jpg, .jpeg, .gif, .webp, .csv, .txt, .json, .xlsx, .docx, .pptx, .mp4, .webm, .mp3, .wav, .vtt, .srt]
+  max_download_bytes: 524288000
+  extra_consequential_terms: []
+
+schedules: []
+# - id: weekly-solar
+#   name: Weekly rooftop solar brief
+#   cron: "45 8 * * 1"             # Mondays 08:45 in the schedule timezone
+#   timezone: Asia/Kolkata
+#   workflow: research_report
+#   goal_template: "Weekly brief on rooftop solar policy changes in India as of {date}"
+#   sources: []
+#   output_destination: telegram_owner
+#   spending_limit: 30
+#   concurrency: forbid
+#   missed_run_policy: skip
+#   enabled: true
+
+video:
+  max_duration_seconds: 3600
+  segment_seconds: 600
+  max_coarse_frames: 48
+  max_dense_frames_per_interval: 12
+  max_total_frames: 160
+  frame_max_side: 1024
+  frames_per_model_call: 8
+  scene_threshold: 0.25
+  live_max_seconds: 300
+  download_max_height: 720
+  download_max_filesize_mb: 500
+
+reports:
+  max_excerpt_chars: 300
+  pdf_companion: false

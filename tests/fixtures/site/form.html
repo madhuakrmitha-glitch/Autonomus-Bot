@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><title>Contact form</title></head>
+<body style="font-family:sans-serif;margin:40px">
+<h1>Contact us</h1>
+<form id="contact" method="post" action="/submit">
+  <label for="msg">Message</label>
+  <input id="msg" name="msg" type="text">
+  <button type="submit">Send message</button>
+</form>
+<p><button id="del" onclick="fetch('/submit?kind=delete',{method:'POST'}).then(()=>document.getElementById('st').textContent='Deleted')">Delete account</button></p>
+<p><button id="theme" onclick="fetch('/submit?kind=theme',{method:'POST'}).then(()=>document.getElementById('st').textContent='Theme changed')">Dark mode</button></p>
+<p id="st">Ready</p>
+<script>
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "e" && document.activeElement === document.body) {
+      fetch('/submit?kind=archive', {method: 'POST'}).then(() => document.getElementById('st').textContent = 'Archived');
+    }
+  });
+</script>
+</body></html>

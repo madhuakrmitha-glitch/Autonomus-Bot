@@ -1,0 +1,329 @@
+{
+  "version": "1.0",
+  "source": "Implementation Specification v1.0, sections 21-22",
+  "note": "Deterministic local fixtures (tests/fixtures/site, generated videos, scripted fixture model). Run `omca fixtures --repeat 3` for the release record; live-source smoke tests are marked `live` and run only with OMCA_LIVE=1.",
+  "cases": [
+    {
+      "id": "AT01",
+      "name": "Owner access",
+      "requirements": [
+        "FR01",
+        "FR15"
+      ],
+      "pass_condition": "Unknown Telegram identity cannot create tasks or approve actions",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_controls.py",
+      "marker": "acceptance('AT01')"
+    },
+    {
+      "id": "AT02",
+      "name": "Open models",
+      "requirements": [
+        "FR15"
+      ],
+      "pass_condition": "Closed or unverified planning, vision and fallback routes are rejected",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_controls.py",
+      "marker": "acceptance('AT02')"
+    },
+    {
+      "id": "AT03",
+      "name": "Mixed modalities",
+      "requirements": [
+        "FR06",
+        "FR15"
+      ],
+      "pass_condition": "Image with tools yields a valid action and continues after a tool result",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_controls.py",
+      "marker": "acceptance('AT03')"
+    },
+    {
+      "id": "AT04",
+      "name": "Browser session",
+      "requirements": [
+        "FR04",
+        "FR05"
+      ],
+      "pass_condition": "Authorized existing session is used; unrelated profiles remain untouched",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_browser.py",
+      "marker": "acceptance('AT04')"
+    },
+    {
+      "id": "AT05",
+      "name": "Structured navigation",
+      "requirements": [
+        "FR05",
+        "FR08"
+      ],
+      "pass_condition": "Labels, waits and fresh element references navigate a changing fixture correctly",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_browser.py",
+      "marker": "acceptance('AT05')"
+    },
+    {
+      "id": "AT06",
+      "name": "Visual interaction",
+      "requirements": [
+        "FR06",
+        "FR07",
+        "FR08"
+      ],
+      "pass_condition": "Canvas target and resized screenshot coordinates produce the expected result",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_browser.py",
+      "marker": "acceptance('AT06')"
+    },
+    {
+      "id": "AT07",
+      "name": "Chart evidence",
+      "requirements": [
+        "FR06",
+        "FR09"
+      ],
+      "pass_condition": "Correct chart relationship and readable values are cited; unreadable values are not invented",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_research_workflow.py",
+      "marker": "acceptance('AT07')"
+    },
+    {
+      "id": "AT08",
+      "name": "Search replacement",
+      "requirements": [
+        "FR03",
+        "FR09"
+      ],
+      "pass_condition": "Two adapters return the same normalized contract and task logic is unchanged",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_controls.py",
+      "marker": "acceptance('AT08')"
+    },
+    {
+      "id": "AT09",
+      "name": "Word report",
+      "requirements": [
+        "FR09",
+        "FR10"
+      ],
+      "pass_condition": "A saved report reopens, cites its claims and is delivered with the correct checksum",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_research_workflow.py",
+      "marker": "acceptance('AT09')"
+    },
+    {
+      "id": "AT10",
+      "name": "Consequential action",
+      "requirements": [
+        "FR11"
+      ],
+      "pass_condition": "Send, submit, delete and unknown GUI mutation cannot execute before a valid decision",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_browser.py",
+      "marker": "acceptance('AT10')"
+    },
+    {
+      "id": "AT11",
+      "name": "Approval binding",
+      "requirements": [
+        "FR11",
+        "FR14"
+      ],
+      "pass_condition": "Changed destination, arguments, owner, state or expired token causes refusal",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_browser.py",
+      "marker": "acceptance('AT11')"
+    },
+    {
+      "id": "AT12",
+      "name": "Restart recovery",
+      "requirements": [
+        "FR02",
+        "FR13",
+        "FR14"
+      ],
+      "pass_condition": "Preferences and checkpoints persist; effects are not repeated; unknown outcomes are reconciled",
+      "release_phase": "P1",
+      "mandatory_control": false,
+      "tests": "tests/test_recovery.py",
+      "marker": "acceptance('AT12')"
+    },
+    {
+      "id": "AT13",
+      "name": "Cancel and pause",
+      "requirements": [
+        "FR12"
+      ],
+      "pass_condition": "New actions stop; completed effects and current state are reported",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_recovery.py",
+      "marker": "acceptance('AT13')"
+    },
+    {
+      "id": "AT14",
+      "name": "Budget race",
+      "requirements": [
+        "FR15"
+      ],
+      "pass_condition": "Simultaneous calls from two workers cannot reserve beyond shared capacity",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_controls.py",
+      "marker": "acceptance('AT14')"
+    },
+    {
+      "id": "AT15",
+      "name": "Page injection",
+      "requirements": [
+        "FR11",
+        "FR15"
+      ],
+      "pass_condition": "Instructions in page text or an image cannot change routes, permissions or recipients",
+      "release_phase": "P1",
+      "mandatory_control": true,
+      "tests": "tests/test_controls.py",
+      "marker": "acceptance('AT15')"
+    },
+    {
+      "id": "AT16",
+      "name": "Spoken video",
+      "requirements": [
+        "FR17",
+        "FR18"
+      ],
+      "pass_condition": "Relevant visual frames and transcript support timestamped findings",
+      "release_phase": "P2",
+      "mandatory_control": false,
+      "tests": "tests/test_video.py",
+      "marker": "acceptance('AT16')"
+    },
+    {
+      "id": "AT17",
+      "name": "Silent demonstration",
+      "requirements": [
+        "FR18",
+        "FR19"
+      ],
+      "pass_condition": "Visual events are analysed without claiming nonexistent narration",
+      "release_phase": "P2",
+      "mandatory_control": false,
+      "tests": "tests/test_video.py",
+      "marker": "acceptance('AT17')"
+    },
+    {
+      "id": "AT18",
+      "name": "Fast event sampling",
+      "requirements": [
+        "FR19"
+      ],
+      "pass_condition": "Brief events trigger denser inspection or an explicit coverage limitation",
+      "release_phase": "P2",
+      "mandatory_control": false,
+      "tests": "tests/test_video.py",
+      "marker": "acceptance('AT18')"
+    },
+    {
+      "id": "AT19",
+      "name": "Inaccessible media",
+      "requirements": [
+        "FR16",
+        "FR17"
+      ],
+      "pass_condition": "Unavailable or protected video returns a truthful blocked or partial outcome",
+      "release_phase": "P2",
+      "mandatory_control": false,
+      "tests": "tests/test_video.py",
+      "marker": "acceptance('AT19')"
+    },
+    {
+      "id": "AT20",
+      "name": "Long video",
+      "requirements": [
+        "FR18",
+        "FR19"
+      ],
+      "pass_condition": "Segments preserve timestamps and evidence; limits prevent unbounded inference",
+      "release_phase": "P2",
+      "mandatory_control": false,
+      "tests": "tests/test_video.py",
+      "marker": "acceptance('AT20')"
+    },
+    {
+      "id": "AT21",
+      "name": "Scheduled research",
+      "requirements": [
+        "FR20",
+        "FR21"
+      ],
+      "pass_condition": "Correct timezone, deduplication and restart behavior; result reaches the owner",
+      "release_phase": "P2",
+      "mandatory_control": false,
+      "tests": "tests/test_schedules.py",
+      "marker": "acceptance('AT21')"
+    },
+    {
+      "id": "AT22",
+      "name": "VM collision",
+      "requirements": [
+        "FR22",
+        "FR23"
+      ],
+      "pass_condition": "Two tasks cannot manipulate the same desktop simultaneously",
+      "release_phase": "P3",
+      "mandatory_control": false,
+      "tests": "tests/test_workers.py",
+      "marker": "acceptance('AT22')"
+    },
+    {
+      "id": "AT23",
+      "name": "Worker loss",
+      "requirements": [
+        "FR14",
+        "FR22",
+        "FR23"
+      ],
+      "pass_condition": "Stale worker cannot act with an invalid fencing token; unresolved effects are reconciled",
+      "release_phase": "P3",
+      "mandatory_control": false,
+      "tests": "tests/test_workers.py",
+      "marker": "acceptance('AT23')"
+    },
+    {
+      "id": "AT24",
+      "name": "Desktop workflow",
+      "requirements": [
+        "FR11",
+        "FR24"
+      ],
+      "pass_condition": "A selected app process uses bounded tools and confirms consequential changes",
+      "release_phase": "P3",
+      "mandatory_control": false,
+      "tests": "tests/test_recovery.py",
+      "marker": "acceptance('AT24')"
+    },
+    {
+      "id": "AT25",
+      "name": "Artifact transfer",
+      "requirements": [
+        "FR25"
+      ],
+      "pass_condition": "Only declared artifacts transfer; incorrect hashes or destinations are refused",
+      "release_phase": "P3",
+      "mandatory_control": false,
+      "tests": "tests/test_workers.py",
+      "marker": "acceptance('AT25')"
+    }
+  ]
+}

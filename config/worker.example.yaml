@@ -1,0 +1,28 @@
+# Worker process configuration - one per Windows VM (`omca worker --config config/worker.yaml`).
+# Run it in the VM's interactive desktop session (Task Scheduler: "At log on", "Run only when user
+# is logged on"), never as a service: browser and desktop automation need the interactive desktop.
+worker_id: vm1
+coordinator_url: http://127.0.0.1:8765        # https://... with ca_file when the coordinator is another VM
+credential_ref: keyring:omca/worker-vm1        # same secret as workers[vm1].credential_ref on the coordinator
+ca_file: null
+workspace_dir: ../worker-workspace             # local receipt cache, downloads, temp media
+capabilities: [browser, video, document, spreadsheet, email, calendar]
+claim_wait_seconds: 20
+ffmpeg_path: ffmpeg
+ffprobe_path: ffprobe
+attachments:                                   # must match browser.attachments for this worker
+  - id: vm1-edge
+    worker_id: vm1
+    mode: persistent_profile
+    channel: msedge
+    user_data_dir: C:/OMCA/profiles/vm1-edge
+    headless: false
+    authorized: false                          # the owner flips this to true on both sides
+smtp: null                                      # email/calendar sending (P3); drafts work without it
+# smtp:
+#   host: smtp.example.com
+#   port: 587
+#   starttls: true
+#   username_ref: keyring:omca/smtp-user
+#   password_ref: keyring:omca/smtp-password
+#   from_address: owner@example.com

@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+# runtime state (never commit task data, secrets or local config)
+data/
+workspace/
+config/application.yaml
+config/worker.yaml
+.env
+*.sqlite3
+*.sqlite3-*
+worker-workspace/

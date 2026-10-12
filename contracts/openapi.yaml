@@ -1,0 +1,1993 @@
+openapi: 3.1.0
+info:
+  title: Open Model Computer Assistant API
+  description: Proposed controller and worker adapter API. Not the public API of OpenClaw.
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      tags:
+      - system
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Health Get
+  /tasks:
+    post:
+      tags:
+      - tasks
+      summary: Create a durable task for the authenticated owner
+      operationId: create_task_tasks_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - tasks
+      summary: List Tasks
+      operationId: list_tasks_tasks_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskView'
+                title: Response List Tasks Tasks Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tasks/{task_id}:
+    get:
+      tags:
+      - tasks
+      summary: Retrieve status, artifacts and blocking reason
+      operationId: get_task_tasks__task_id__get
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tasks/{task_id}/cancel:
+    post:
+      tags:
+      - tasks
+      summary: Stop future work and reconcile in-flight actions
+      operationId: cancel_task_tasks__task_id__cancel_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tasks/{task_id}/pause:
+    post:
+      tags:
+      - tasks
+      summary: Pause Task
+      operationId: pause_task_tasks__task_id__pause_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tasks/{task_id}/resume:
+    post:
+      tags:
+      - tasks
+      summary: Resume Task
+      operationId: resume_task_tasks__task_id__resume_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResumeRequest'
+              default: {}
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tasks/{task_id}/steer:
+    post:
+      tags:
+      - tasks
+      summary: Steer Task
+      operationId: steer_task_tasks__task_id__steer_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SteerRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tasks/{task_id}/answer:
+    post:
+      tags:
+      - tasks
+      summary: Answer Task
+      operationId: answer_task_tasks__task_id__answer_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SteerRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /artifacts/{artifact_id}:
+    get:
+      tags:
+      - tasks
+      summary: Get Artifact
+      operationId: get_artifact_artifacts__artifact_id__get
+      parameters:
+      - name: artifact_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Artifact Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /approvals/{approval_id}:
+    get:
+      tags:
+      - approvals
+      summary: Get Approval
+      operationId: get_approval_approvals__approval_id__get
+      parameters:
+      - name: approval_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Approval Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /approvals/{approval_id}/decisions:
+    post:
+      tags:
+      - approvals
+      summary: Submit an authenticated action-bound decision
+      operationId: decide_approvals__approval_id__decisions_post
+      parameters:
+      - name: approval_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Approval Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Approvals  Approval Id  Decisions Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /budget:
+    get:
+      tags:
+      - budget
+      summary: Inspect period, reservations, actual usage and remaining capacity
+      operationId: budget_budget_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /schedules:
+    get:
+      tags:
+      - schedules
+      summary: Schedules
+      operationId: schedules_schedules_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Schedules Schedules Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /schedules/{schedule_id}/fire:
+    post:
+      tags:
+      - schedules
+      summary: Trigger a schedule (deduplicated by planned time; for OpenClaw automations)
+      operationId: fire_schedules__schedule_id__fire_post
+      parameters:
+      - name: schedule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Schedule Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FireRequest'
+              default: {}
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Fire Schedules  Schedule Id  Fire Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workers/register:
+    post:
+      tags:
+      - workers
+      summary: Register a worker and capability set
+      operationId: register_workers_register_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerRegistration'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Register Workers Register Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workers/{worker_id}/heartbeat:
+    post:
+      tags:
+      - workers
+      summary: Heartbeat
+      operationId: heartbeat_workers__worker_id__heartbeat_post
+      parameters:
+      - name: worker_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Worker Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeat'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Heartbeat Workers  Worker Id  Heartbeat Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workers/{worker_id}/jobs:
+    post:
+      tags:
+      - workers
+      summary: Dispatch the next fenced bounded job to this worker (long poll; 204
+        when idle)
+      operationId: jobs_workers__worker_id__jobs_post
+      parameters:
+      - name: worker_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Worker Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerJob'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workers/{worker_id}/receipts:
+    post:
+      tags:
+      - workers
+      summary: Submit durable execution results
+      operationId: receipts_workers__worker_id__receipts_post
+      parameters:
+      - name: worker_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Worker Id
+      - name: x-omca-session-epoch
+        in: header
+        required: true
+        schema:
+          type: string
+          title: X-Omca-Session-Epoch
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionReceipt'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Receipts Workers  Worker Id  Receipts Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workers/{worker_id}/artifacts:
+    post:
+      tags:
+      - workers
+      summary: Upload a declared job output
+      operationId: upload_workers__worker_id__artifacts_post
+      parameters:
+      - name: worker_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Worker Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_workers__worker_id__artifacts_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Upload Workers  Worker Id  Artifacts Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /workers/{worker_id}/jobs/{job_id}/inputs/{artifact_id}:
+    get:
+      tags:
+      - workers
+      summary: Job Input
+      operationId: job_input_workers__worker_id__jobs__job_id__inputs__artifact_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      - name: artifact_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Artifact Id
+      - name: worker_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Worker Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /bridge/openclaw/message:
+    post:
+      tags:
+      - bridge
+      summary: Owner message forwarded by the OpenClaw plugin with its verified sender
+        id
+      operationId: bridge_message_bridge_openclaw_message_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeMessage'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Bridge Message Bridge Openclaw Message Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /bridge/openclaw/callback:
+    post:
+      tags:
+      - bridge
+      summary: Inline-button callback (namespace omca) forwarded by the OpenClaw plugin
+      operationId: bridge_callback_bridge_openclaw_callback_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BridgeCallback'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Bridge Callback Bridge Openclaw Callback Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/models:
+    get:
+      tags:
+      - model-gateway
+      summary: Models
+      operationId: models_v1_models_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Models V1 Models Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/chat/completions:
+    post:
+      tags:
+      - model-gateway
+      summary: OpenAI-compatible, allowlisted and metered chat completions for framework-owned
+        calls
+      operationId: chat_v1_chat_completions_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    ActionReceipt:
+      properties:
+        action_id:
+          type: string
+          title: Action Id
+        job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Job Id
+        worker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worker Id
+        fencing_token:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Fencing Token
+        status:
+          $ref: '#/components/schemas/ReceiptStatus'
+        started_at:
+          type: string
+          title: Started At
+        finished_at:
+          type: string
+          title: Finished At
+        result:
+          additionalProperties: true
+          type: object
+          title: Result
+        observation:
+          anyOf:
+          - $ref: '#/components/schemas/Observation'
+          - type: 'null'
+        artifact_ids:
+          items:
+            type: string
+          type: array
+          title: Artifact Ids
+        verification:
+          additionalProperties: true
+          type: object
+          title: Verification
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ReceiptError'
+          - type: 'null'
+        component_versions:
+          additionalProperties:
+            type: string
+          type: object
+          title: Component Versions
+      additionalProperties: false
+      type: object
+      required:
+      - action_id
+      - status
+      - started_at
+      - finished_at
+      title: ActionReceipt
+    ApprovalDecision:
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - deny
+          title: Decision
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      additionalProperties: false
+      type: object
+      required:
+      - decision
+      title: ApprovalDecision
+    ApprovalRequest:
+      properties:
+        approval_id:
+          type: string
+          title: Approval Id
+        task_id:
+          type: string
+          title: Task Id
+        action_id:
+          type: string
+          title: Action Id
+        owner:
+          type: string
+          title: Owner
+        operation:
+          type: string
+          title: Operation
+        action_digest:
+          type: string
+          title: Action Digest
+        destination:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Destination
+        consequence:
+          type: string
+          title: Consequence
+        preview:
+          type: string
+          title: Preview
+        preconditions:
+          additionalProperties: true
+          type: object
+          title: Preconditions
+        policy_version:
+          type: string
+          title: Policy Version
+        expires_at:
+          type: string
+          title: Expires At
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+          default: PENDING
+      additionalProperties: false
+      type: object
+      required:
+      - approval_id
+      - task_id
+      - action_id
+      - owner
+      - operation
+      - action_digest
+      - destination
+      - consequence
+      - preview
+      - policy_version
+      - expires_at
+      title: ApprovalRequest
+    ApprovalStatus:
+      type: string
+      enum:
+      - PENDING
+      - APPROVED
+      - DENIED
+      - EXPIRED
+      - CONSUMED
+      - INVALIDATED
+      title: ApprovalStatus
+    ArtifactManifest:
+      properties:
+        artifact_id:
+          type: string
+          title: Artifact Id
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        name:
+          type: string
+          title: Name
+        rel_path:
+          type: string
+          title: Rel Path
+          description: Path relative to the workspace root
+        media_type:
+          type: string
+          title: Media Type
+        bytes:
+          type: integer
+          title: Bytes
+        sha256:
+          type: string
+          title: Sha256
+        kind:
+          type: string
+          title: Kind
+          description: report, evidence, observation, media, input, transfer
+        parent_artifact_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Artifact Id
+        crop:
+          anyOf:
+          - $ref: '#/components/schemas/Rect'
+          - type: 'null'
+        width:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Width
+        height:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Height
+        resize_scale:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Resize Scale
+        source_map:
+          additionalProperties: true
+          type: object
+          title: Source Map
+        validation:
+          additionalProperties: true
+          type: object
+          title: Validation
+        created_at:
+          type: string
+          title: Created At
+      additionalProperties: false
+      type: object
+      required:
+      - artifact_id
+      - task_id
+      - name
+      - rel_path
+      - media_type
+      - bytes
+      - sha256
+      - kind
+      - created_at
+      title: ArtifactManifest
+    Body_upload_workers__worker_id__artifacts_post:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+        output_kind:
+          type: string
+          title: Output Kind
+        meta:
+          type: string
+          title: Meta
+          default: '{}'
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - job_id
+      - output_kind
+      - file
+      title: Body_upload_workers__worker_id__artifacts_post
+    BridgeCallback:
+      properties:
+        sender_id:
+          type: string
+          title: Sender Id
+        data:
+          type: string
+          title: Data
+        callback_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Callback Id
+      type: object
+      required:
+      - sender_id
+      - data
+      title: BridgeCallback
+    BridgeMessage:
+      properties:
+        sender_id:
+          type: string
+          title: Sender Id
+        text:
+          type: string
+          title: Text
+          default: ''
+        message_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message Id
+        reply_to_message_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reply To Message Id
+        attachments:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Attachments
+          default: []
+      type: object
+      required:
+      - sender_id
+      title: BridgeMessage
+    BudgetStatus:
+      properties:
+        currency:
+          type: string
+          title: Currency
+        period:
+          type: string
+          title: Period
+        period_timezone:
+          type: string
+          title: Period Timezone
+        ceiling:
+          type: number
+          title: Ceiling
+        settled:
+          type: number
+          title: Settled
+        reserved:
+          type: number
+          title: Reserved
+        unknown:
+          type: number
+          title: Unknown
+        remaining:
+          type: number
+          title: Remaining
+        utilisation:
+          type: number
+          title: Utilisation
+        thresholds_crossed:
+          items:
+            type: number
+          type: array
+          title: Thresholds Crossed
+        per_task_ceiling:
+          type: number
+          title: Per Task Ceiling
+        hosted_routes_enabled:
+          items:
+            type: string
+          type: array
+          title: Hosted Routes Enabled
+        disabled_routes:
+          additionalProperties:
+            type: string
+          type: object
+          title: Disabled Routes
+      additionalProperties: false
+      type: object
+      required:
+      - currency
+      - period
+      - period_timezone
+      - ceiling
+      - settled
+      - reserved
+      - unknown
+      - remaining
+      - utilisation
+      - thresholds_crossed
+      - per_task_ceiling
+      - hosted_routes_enabled
+      - disabled_routes
+      title: BudgetStatus
+    ClaimRequest:
+      properties:
+        session_epoch:
+          type: string
+          title: Session Epoch
+        wait_seconds:
+          type: number
+          title: Wait Seconds
+          default: 20.0
+      type: object
+      required:
+      - session_epoch
+      title: ClaimRequest
+    ElementRef:
+      properties:
+        ref:
+          type: string
+          title: Ref
+          description: Reference valid only for the observation that produced it
+        role:
+          type: string
+          title: Role
+        name:
+          type: string
+          title: Name
+          default: ''
+        tag:
+          type: string
+          title: Tag
+        rect:
+          $ref: '#/components/schemas/Rect'
+        href:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Href
+        input_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Input Type
+        in_form:
+          type: boolean
+          title: In Form
+          default: false
+        form_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Form Id
+        disabled:
+          type: boolean
+          title: Disabled
+          default: false
+        expanded:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Expanded
+        checked:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Checked
+        value:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Value
+        editable:
+          type: boolean
+          title: Editable
+          default: false
+        fingerprint:
+          type: string
+          title: Fingerprint
+      additionalProperties: false
+      type: object
+      required:
+      - ref
+      - role
+      - tag
+      - rect
+      - fingerprint
+      title: ElementRef
+    ErrorCode:
+      type: string
+      enum:
+      - BUDGET_BLOCKED
+      - WORKER_UNAVAILABLE
+      - AUTH_REQUIRED
+      - UNSUPPORTED_MEDIA
+      - MALFORMED_TOOL_CALL
+      - UNCERTAIN_SIDE_EFFECT
+      - EVIDENCE_GAP
+      - POLICY_DENIED
+      - APPROVAL_DENIED
+      - APPROVAL_EXPIRED
+      - APPROVAL_INVALID
+      - STALE_OBSERVATION
+      - STALE_ELEMENT_REF
+      - STALE_FENCING_TOKEN
+      - UNSUPPORTED_CAPABILITY
+      - ROUTE_REJECTED
+      - LIMIT_EXCEEDED
+      - SITE_UNAVAILABLE
+      - VERIFICATION_FAILED
+      - TIMEOUT
+      - CANCELLED
+      - INTERNAL
+      title: ErrorCode
+    ExpectedResult:
+      properties:
+        url_contains:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url Contains
+        text_visible:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text Visible
+        element_value:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Element Value
+        download_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Download Name
+        new_tab:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: New Tab
+      additionalProperties: false
+      type: object
+      title: ExpectedResult
+    FireRequest:
+      properties:
+        planned_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Planned At
+      type: object
+      title: FireRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ImageRef:
+      properties:
+        artifact_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Artifact Id
+        src:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src
+        alt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Alt
+        natural_width:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Natural Width
+        natural_height:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Natural Height
+        rect:
+          anyOf:
+          - $ref: '#/components/schemas/Rect'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      title: ImageRef
+    Observation:
+      properties:
+        observation_id:
+          type: string
+          title: Observation Id
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        worker_id:
+          type: string
+          title: Worker Id
+        session_id:
+          type: string
+          title: Session Id
+        url:
+          type: string
+          title: Url
+        title:
+          type: string
+          title: Title
+          default: ''
+        captured_at:
+          type: string
+          title: Captured At
+        viewport:
+          $ref: '#/components/schemas/Viewport'
+        elements:
+          items:
+            $ref: '#/components/schemas/ElementRef'
+          type: array
+          title: Elements
+        focused_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Focused Ref
+          description: Element that currently has keyboard focus
+        text:
+          type: string
+          title: Text
+          description: Visible text (untrusted task data)
+          default: ''
+        screenshot_artifact_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Screenshot Artifact Id
+        screenshot_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Screenshot Sha256
+        screenshot_width:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Screenshot Width
+        screenshot_height:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Screenshot Height
+        images:
+          items:
+            $ref: '#/components/schemas/ImageRef'
+          type: array
+          title: Images
+        open_tabs:
+          items:
+            type: string
+          type: array
+          title: Open Tabs
+        downloads:
+          items:
+            type: string
+          type: array
+          title: Downloads
+        dom_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dom Version
+      additionalProperties: false
+      type: object
+      required:
+      - observation_id
+      - worker_id
+      - session_id
+      - url
+      - captured_at
+      - viewport
+      title: Observation
+    ReceiptError:
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          title: Message
+        retryable:
+          type: boolean
+          title: Retryable
+          default: false
+      additionalProperties: false
+      type: object
+      required:
+      - code
+      - message
+      title: ReceiptError
+    ReceiptStatus:
+      type: string
+      enum:
+      - SUCCEEDED
+      - FAILED
+      - UNKNOWN
+      - REJECTED
+      title: ReceiptStatus
+    Rect:
+      properties:
+        x:
+          type: number
+          title: X
+        y:
+          type: number
+          title: Y
+        width:
+          type: number
+          title: Width
+        height:
+          type: number
+          title: Height
+      additionalProperties: false
+      type: object
+      required:
+      - x
+      - y
+      - width
+      - height
+      title: Rect
+    ResumeRequest:
+      properties:
+        extra_budget:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Extra Budget
+      type: object
+      title: ResumeRequest
+    SteerRequest:
+      properties:
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - text
+      title: SteerRequest
+    TaskBudget:
+      properties:
+        max_model_spend:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max Model Spend
+          description: Per-task hosted inference ceiling in budget currency
+        max_actions:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Max Actions
+        max_active_minutes:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Max Active Minutes
+      additionalProperties: false
+      type: object
+      title: TaskBudget
+    TaskRequest:
+      properties:
+        goal:
+          type: string
+          maxLength: 8000
+          minLength: 1
+          title: Goal
+        workflow:
+          type: string
+          enum:
+          - research_report
+          - video_analysis
+          - browser_task
+          - desktop_workflow
+          - auto
+          title: Workflow
+          default: auto
+        constraints:
+          items:
+            type: string
+          type: array
+          title: Constraints
+        output_format:
+          type: string
+          enum:
+          - docx
+          - docx+pdf
+          - message
+          title: Output Format
+          default: docx
+        budget:
+          $ref: '#/components/schemas/TaskBudget'
+        source_preference:
+          type: string
+          enum:
+          - auto
+          - api
+          - browser
+          title: Source Preference
+          default: auto
+        sources:
+          items:
+            type: string
+          type: array
+          title: Sources
+          description: URLs or domains to use or prefer
+        attachments:
+          items:
+            type: string
+          type: array
+          title: Attachments
+          description: Artifact IDs of owner-supplied inputs
+        worker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worker Id
+          description: Explicit job routing to a worker
+        params:
+          additionalProperties: true
+          type: object
+          title: Params
+          description: Workflow parameters (e.g. video url, question)
+      additionalProperties: false
+      type: object
+      required:
+      - goal
+      title: TaskRequest
+      description: Created only from an authenticated owner context (channel bridge
+        or owner API token).
+    TaskStatus:
+      type: string
+      enum:
+      - QUEUED
+      - RUNNING
+      - AWAITING_APPROVAL
+      - AWAITING_USER
+      - BLOCKED
+      - PAUSED
+      - VERIFYING
+      - COMPLETED
+      - PARTIAL
+      - FAILED
+      - CANCELLED
+      title: TaskStatus
+    TaskView:
+      properties:
+        task_id:
+          type: string
+          title: Task Id
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        workflow:
+          type: string
+          title: Workflow
+        goal:
+          type: string
+          title: Goal
+        phase:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phase
+        current_step:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Step
+        worker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Worker Id
+        blocking_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blocking Reason
+        progress:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Progress
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        result:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Result
+        artifacts:
+          items:
+            $ref: '#/components/schemas/ArtifactManifest'
+          type: array
+          title: Artifacts
+        pending_approval_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pending Approval Id
+      additionalProperties: false
+      type: object
+      required:
+      - task_id
+      - status
+      - workflow
+      - goal
+      - created_at
+      - updated_at
+      title: TaskView
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    Viewport:
+      properties:
+        width:
+          type: integer
+          title: Width
+        height:
+          type: integer
+          title: Height
+        device_pixel_ratio:
+          type: number
+          title: Device Pixel Ratio
+          default: 1.0
+        scroll_x:
+          type: number
+          title: Scroll X
+          default: 0.0
+        scroll_y:
+          type: number
+          title: Scroll Y
+          default: 0.0
+      additionalProperties: false
+      type: object
+      required:
+      - width
+      - height
+      title: Viewport
+    WorkerHeartbeat:
+      properties:
+        session_epoch:
+          type: string
+          title: Session Epoch
+        busy_job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Busy Job Id
+        health:
+          additionalProperties: true
+          type: object
+          title: Health
+      additionalProperties: false
+      type: object
+      required:
+      - session_epoch
+      title: WorkerHeartbeat
+    WorkerJob:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+        task_id:
+          type: string
+          title: Task Id
+        action_id:
+          type: string
+          title: Action Id
+        worker_id:
+          type: string
+          title: Worker Id
+        lease_id:
+          type: string
+          title: Lease Id
+        resource:
+          type: string
+          title: Resource
+        fencing_token:
+          type: integer
+          title: Fencing Token
+        operation:
+          type: string
+          title: Operation
+        arguments:
+          additionalProperties: true
+          type: object
+          title: Arguments
+        expected:
+          anyOf:
+          - $ref: '#/components/schemas/ExpectedResult'
+          - type: 'null'
+        idempotency_key:
+          type: string
+          title: Idempotency Key
+        deadline:
+          type: string
+          title: Deadline
+        lease_expires_at:
+          type: string
+          title: Lease Expires At
+        issued_at:
+          type: string
+          title: Issued At
+        approval_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approval Id
+        attachment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attachment Id
+          description: Authorized browser attachment to act in
+        declared_inputs:
+          items:
+            type: string
+          type: array
+          title: Declared Inputs
+        declared_outputs:
+          items:
+            type: string
+          type: array
+          title: Declared Outputs
+      additionalProperties: false
+      type: object
+      required:
+      - job_id
+      - task_id
+      - action_id
+      - worker_id
+      - lease_id
+      - resource
+      - fencing_token
+      - operation
+      - idempotency_key
+      - deadline
+      - lease_expires_at
+      - issued_at
+      title: WorkerJob
+    WorkerRegistration:
+      properties:
+        worker_id:
+          type: string
+          title: Worker Id
+        capabilities:
+          items:
+            type: string
+          type: array
+          title: Capabilities
+        session_epoch:
+          type: string
+          title: Session Epoch
+          description: Unique per worker process start; newer epochs fence out stale
+            processes
+        version:
+          type: string
+          title: Version
+        interactive_resources:
+          items:
+            type: string
+          type: array
+          title: Interactive Resources
+        attachments:
+          items:
+            type: string
+          type: array
+          title: Attachments
+        platform:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Platform
+      additionalProperties: false
+      type: object
+      required:
+      - worker_id
+      - capabilities
+      - session_epoch
+      - version
+      title: WorkerRegistration

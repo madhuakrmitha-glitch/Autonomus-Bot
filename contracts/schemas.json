@@ -1,0 +1,4038 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open Model Computer Assistant application contracts",
+  "version": "0.1.0",
+  "note": "Proposed application interfaces, not OpenClaw API schemas. Schema validation does not establish permission: every operation is also classified by the policy gate (see docs/policy.md).",
+  "contracts": {
+    "ActionIntent": {
+      "$defs": {
+        "ExpectedResult": {
+          "additionalProperties": false,
+          "properties": {
+            "url_contains": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Url Contains"
+            },
+            "text_visible": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text Visible"
+            },
+            "element_value": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Element Value"
+            },
+            "download_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Download Name"
+            },
+            "new_tab": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "New Tab"
+            }
+          },
+          "title": "ExpectedResult",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Id"
+        },
+        "observation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Id"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "target": {
+          "additionalProperties": true,
+          "title": "Target",
+          "type": "object"
+        },
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExpectedResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        }
+      },
+      "required": [
+        "action_id",
+        "task_id",
+        "operation",
+        "idempotency_key"
+      ],
+      "title": "ActionIntent",
+      "type": "object"
+    },
+    "ActionReceipt": {
+      "$defs": {
+        "ElementRef": {
+          "additionalProperties": false,
+          "properties": {
+            "ref": {
+              "description": "Reference valid only for the observation that produced it",
+              "title": "Ref",
+              "type": "string"
+            },
+            "role": {
+              "title": "Role",
+              "type": "string"
+            },
+            "name": {
+              "default": "",
+              "title": "Name",
+              "type": "string"
+            },
+            "tag": {
+              "title": "Tag",
+              "type": "string"
+            },
+            "rect": {
+              "$ref": "#/$defs/Rect"
+            },
+            "href": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Href"
+            },
+            "input_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Type"
+            },
+            "in_form": {
+              "default": false,
+              "title": "In Form",
+              "type": "boolean"
+            },
+            "form_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Form Id"
+            },
+            "disabled": {
+              "default": false,
+              "title": "Disabled",
+              "type": "boolean"
+            },
+            "expanded": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Expanded"
+            },
+            "checked": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Checked"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value"
+            },
+            "editable": {
+              "default": false,
+              "title": "Editable",
+              "type": "boolean"
+            },
+            "fingerprint": {
+              "title": "Fingerprint",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref",
+            "role",
+            "tag",
+            "rect",
+            "fingerprint"
+          ],
+          "title": "ElementRef",
+          "type": "object"
+        },
+        "ErrorCode": {
+          "enum": [
+            "BUDGET_BLOCKED",
+            "WORKER_UNAVAILABLE",
+            "AUTH_REQUIRED",
+            "UNSUPPORTED_MEDIA",
+            "MALFORMED_TOOL_CALL",
+            "UNCERTAIN_SIDE_EFFECT",
+            "EVIDENCE_GAP",
+            "POLICY_DENIED",
+            "APPROVAL_DENIED",
+            "APPROVAL_EXPIRED",
+            "APPROVAL_INVALID",
+            "STALE_OBSERVATION",
+            "STALE_ELEMENT_REF",
+            "STALE_FENCING_TOKEN",
+            "UNSUPPORTED_CAPABILITY",
+            "ROUTE_REJECTED",
+            "LIMIT_EXCEEDED",
+            "SITE_UNAVAILABLE",
+            "VERIFICATION_FAILED",
+            "TIMEOUT",
+            "CANCELLED",
+            "INTERNAL"
+          ],
+          "title": "ErrorCode",
+          "type": "string"
+        },
+        "ImageRef": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Artifact Id"
+            },
+            "src": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Src"
+            },
+            "alt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alt"
+            },
+            "natural_width": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Natural Width"
+            },
+            "natural_height": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Natural Height"
+            },
+            "rect": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Rect"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "title": "ImageRef",
+          "type": "object"
+        },
+        "Observation": {
+          "additionalProperties": false,
+          "properties": {
+            "observation_id": {
+              "title": "Observation Id",
+              "type": "string"
+            },
+            "task_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Task Id"
+            },
+            "worker_id": {
+              "title": "Worker Id",
+              "type": "string"
+            },
+            "session_id": {
+              "title": "Session Id",
+              "type": "string"
+            },
+            "url": {
+              "title": "Url",
+              "type": "string"
+            },
+            "title": {
+              "default": "",
+              "title": "Title",
+              "type": "string"
+            },
+            "captured_at": {
+              "title": "Captured At",
+              "type": "string"
+            },
+            "viewport": {
+              "$ref": "#/$defs/Viewport"
+            },
+            "elements": {
+              "items": {
+                "$ref": "#/$defs/ElementRef"
+              },
+              "title": "Elements",
+              "type": "array"
+            },
+            "focused_ref": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Element that currently has keyboard focus",
+              "title": "Focused Ref"
+            },
+            "text": {
+              "default": "",
+              "description": "Visible text (untrusted task data)",
+              "title": "Text",
+              "type": "string"
+            },
+            "screenshot_artifact_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Screenshot Artifact Id"
+            },
+            "screenshot_sha256": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Screenshot Sha256"
+            },
+            "screenshot_width": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Screenshot Width"
+            },
+            "screenshot_height": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Screenshot Height"
+            },
+            "images": {
+              "items": {
+                "$ref": "#/$defs/ImageRef"
+              },
+              "title": "Images",
+              "type": "array"
+            },
+            "open_tabs": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Open Tabs",
+              "type": "array"
+            },
+            "downloads": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Downloads",
+              "type": "array"
+            },
+            "dom_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Dom Version"
+            }
+          },
+          "required": [
+            "observation_id",
+            "worker_id",
+            "session_id",
+            "url",
+            "captured_at",
+            "viewport"
+          ],
+          "title": "Observation",
+          "type": "object"
+        },
+        "ReceiptError": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            },
+            "retryable": {
+              "default": false,
+              "title": "Retryable",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "ReceiptError",
+          "type": "object"
+        },
+        "ReceiptStatus": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED",
+            "UNKNOWN",
+            "REJECTED"
+          ],
+          "title": "ReceiptStatus",
+          "type": "string"
+        },
+        "Rect": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            },
+            "width": {
+              "title": "Width",
+              "type": "number"
+            },
+            "height": {
+              "title": "Height",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "title": "Rect",
+          "type": "object"
+        },
+        "Viewport": {
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "title": "Width",
+              "type": "integer"
+            },
+            "height": {
+              "title": "Height",
+              "type": "integer"
+            },
+            "device_pixel_ratio": {
+              "default": 1.0,
+              "title": "Device Pixel Ratio",
+              "type": "number"
+            },
+            "scroll_x": {
+              "default": 0.0,
+              "title": "Scroll X",
+              "type": "number"
+            },
+            "scroll_y": {
+              "default": 0.0,
+              "title": "Scroll Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "width",
+            "height"
+          ],
+          "title": "Viewport",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Id"
+        },
+        "fencing_token": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fencing Token"
+        },
+        "status": {
+          "$ref": "#/$defs/ReceiptStatus"
+        },
+        "started_at": {
+          "title": "Started At",
+          "type": "string"
+        },
+        "finished_at": {
+          "title": "Finished At",
+          "type": "string"
+        },
+        "result": {
+          "additionalProperties": true,
+          "title": "Result",
+          "type": "object"
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Observation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "artifact_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Ids",
+          "type": "array"
+        },
+        "verification": {
+          "additionalProperties": true,
+          "title": "Verification",
+          "type": "object"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReceiptError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "component_versions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Component Versions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "action_id",
+        "status",
+        "started_at",
+        "finished_at"
+      ],
+      "title": "ActionReceipt",
+      "type": "object"
+    },
+    "ApprovalDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "deny"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "title": "ApprovalDecision",
+      "type": "object"
+    },
+    "ApprovalRequest": {
+      "$defs": {
+        "ApprovalStatus": {
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "DENIED",
+            "EXPIRED",
+            "CONSUMED",
+            "INVALIDATED"
+          ],
+          "title": "ApprovalStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "action_digest": {
+          "title": "Action Digest",
+          "type": "string"
+        },
+        "destination": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Destination"
+        },
+        "consequence": {
+          "title": "Consequence",
+          "type": "string"
+        },
+        "preview": {
+          "title": "Preview",
+          "type": "string"
+        },
+        "preconditions": {
+          "additionalProperties": true,
+          "title": "Preconditions",
+          "type": "object"
+        },
+        "policy_version": {
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ApprovalStatus",
+          "default": "PENDING"
+        }
+      },
+      "required": [
+        "approval_id",
+        "task_id",
+        "action_id",
+        "owner",
+        "operation",
+        "action_digest",
+        "destination",
+        "consequence",
+        "preview",
+        "policy_version",
+        "expires_at"
+      ],
+      "title": "ApprovalRequest",
+      "type": "object"
+    },
+    "ArtifactManifest": {
+      "$defs": {
+        "Rect": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            },
+            "width": {
+              "title": "Width",
+              "type": "number"
+            },
+            "height": {
+              "title": "Height",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "title": "Rect",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Task Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rel_path": {
+          "description": "Path relative to the workspace root",
+          "title": "Rel Path",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "kind": {
+          "description": "report, evidence, observation, media, input, transfer",
+          "title": "Kind",
+          "type": "string"
+        },
+        "parent_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Artifact Id"
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "resize_scale": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resize Scale"
+        },
+        "source_map": {
+          "additionalProperties": true,
+          "title": "Source Map",
+          "type": "object"
+        },
+        "validation": {
+          "additionalProperties": true,
+          "title": "Validation",
+          "type": "object"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "task_id",
+        "name",
+        "rel_path",
+        "media_type",
+        "bytes",
+        "sha256",
+        "kind",
+        "created_at"
+      ],
+      "title": "ArtifactManifest",
+      "type": "object"
+    },
+    "BudgetStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        },
+        "period_timezone": {
+          "title": "Period Timezone",
+          "type": "string"
+        },
+        "ceiling": {
+          "title": "Ceiling",
+          "type": "number"
+        },
+        "settled": {
+          "title": "Settled",
+          "type": "number"
+        },
+        "reserved": {
+          "title": "Reserved",
+          "type": "number"
+        },
+        "unknown": {
+          "title": "Unknown",
+          "type": "number"
+        },
+        "remaining": {
+          "title": "Remaining",
+          "type": "number"
+        },
+        "utilisation": {
+          "title": "Utilisation",
+          "type": "number"
+        },
+        "thresholds_crossed": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Thresholds Crossed",
+          "type": "array"
+        },
+        "per_task_ceiling": {
+          "title": "Per Task Ceiling",
+          "type": "number"
+        },
+        "hosted_routes_enabled": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hosted Routes Enabled",
+          "type": "array"
+        },
+        "disabled_routes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Disabled Routes",
+          "type": "object"
+        }
+      },
+      "required": [
+        "currency",
+        "period",
+        "period_timezone",
+        "ceiling",
+        "settled",
+        "reserved",
+        "unknown",
+        "remaining",
+        "utilisation",
+        "thresholds_crossed",
+        "per_task_ceiling",
+        "hosted_routes_enabled",
+        "disabled_routes"
+      ],
+      "title": "BudgetStatus",
+      "type": "object"
+    },
+    "Claim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "support": {
+          "default": "supported",
+          "enum": [
+            "supported",
+            "unsupported",
+            "disputed",
+            "uncertain"
+          ],
+          "title": "Support",
+          "type": "string"
+        },
+        "review_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Note"
+        }
+      },
+      "required": [
+        "claim_id",
+        "task_id",
+        "text"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "EvidenceRecord": {
+      "$defs": {
+        "Rect": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            },
+            "width": {
+              "title": "Width",
+              "type": "number"
+            },
+            "height": {
+              "title": "Height",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "title": "Rect",
+          "type": "object"
+        },
+        "VideoInterval": {
+          "additionalProperties": false,
+          "properties": {
+            "start_seconds": {
+              "title": "Start Seconds",
+              "type": "number"
+            },
+            "end_seconds": {
+              "title": "End Seconds",
+              "type": "number"
+            },
+            "frame_artifact_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Frame Artifact Ids",
+              "type": "array"
+            },
+            "transcript_segment_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Transcript Segment Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "start_seconds",
+            "end_seconds"
+          ],
+          "title": "VideoInterval",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text_excerpt",
+            "image_region",
+            "video_interval",
+            "page_capture",
+            "search_result"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "final_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Url"
+        },
+        "source_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Date"
+        },
+        "captured_at": {
+          "title": "Captured At",
+          "type": "string"
+        },
+        "excerpt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excerpt"
+        },
+        "locator": {
+          "additionalProperties": true,
+          "description": "Character offsets, CSS path or text fragment",
+          "title": "Locator",
+          "type": "object"
+        },
+        "image_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Artifact Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "video_interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoInterval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "content_sha256": {
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "limitations": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limitations"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "task_id",
+        "kind",
+        "source_url",
+        "captured_at",
+        "content_sha256"
+      ],
+      "title": "EvidenceRecord",
+      "type": "object"
+    },
+    "Observation": {
+      "$defs": {
+        "ElementRef": {
+          "additionalProperties": false,
+          "properties": {
+            "ref": {
+              "description": "Reference valid only for the observation that produced it",
+              "title": "Ref",
+              "type": "string"
+            },
+            "role": {
+              "title": "Role",
+              "type": "string"
+            },
+            "name": {
+              "default": "",
+              "title": "Name",
+              "type": "string"
+            },
+            "tag": {
+              "title": "Tag",
+              "type": "string"
+            },
+            "rect": {
+              "$ref": "#/$defs/Rect"
+            },
+            "href": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Href"
+            },
+            "input_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Input Type"
+            },
+            "in_form": {
+              "default": false,
+              "title": "In Form",
+              "type": "boolean"
+            },
+            "form_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Form Id"
+            },
+            "disabled": {
+              "default": false,
+              "title": "Disabled",
+              "type": "boolean"
+            },
+            "expanded": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Expanded"
+            },
+            "checked": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Checked"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value"
+            },
+            "editable": {
+              "default": false,
+              "title": "Editable",
+              "type": "boolean"
+            },
+            "fingerprint": {
+              "title": "Fingerprint",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref",
+            "role",
+            "tag",
+            "rect",
+            "fingerprint"
+          ],
+          "title": "ElementRef",
+          "type": "object"
+        },
+        "ImageRef": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Artifact Id"
+            },
+            "src": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Src"
+            },
+            "alt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alt"
+            },
+            "natural_width": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Natural Width"
+            },
+            "natural_height": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Natural Height"
+            },
+            "rect": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Rect"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "title": "ImageRef",
+          "type": "object"
+        },
+        "Rect": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            },
+            "width": {
+              "title": "Width",
+              "type": "number"
+            },
+            "height": {
+              "title": "Height",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "title": "Rect",
+          "type": "object"
+        },
+        "Viewport": {
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "title": "Width",
+              "type": "integer"
+            },
+            "height": {
+              "title": "Height",
+              "type": "integer"
+            },
+            "device_pixel_ratio": {
+              "default": 1.0,
+              "title": "Device Pixel Ratio",
+              "type": "number"
+            },
+            "scroll_x": {
+              "default": 0.0,
+              "title": "Scroll X",
+              "type": "number"
+            },
+            "scroll_y": {
+              "default": 0.0,
+              "title": "Scroll Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "width",
+            "height"
+          ],
+          "title": "Viewport",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "observation_id": {
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "worker_id": {
+          "title": "Worker Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "captured_at": {
+          "title": "Captured At",
+          "type": "string"
+        },
+        "viewport": {
+          "$ref": "#/$defs/Viewport"
+        },
+        "elements": {
+          "items": {
+            "$ref": "#/$defs/ElementRef"
+          },
+          "title": "Elements",
+          "type": "array"
+        },
+        "focused_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Element that currently has keyboard focus",
+          "title": "Focused Ref"
+        },
+        "text": {
+          "default": "",
+          "description": "Visible text (untrusted task data)",
+          "title": "Text",
+          "type": "string"
+        },
+        "screenshot_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot Artifact Id"
+        },
+        "screenshot_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot Sha256"
+        },
+        "screenshot_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot Width"
+        },
+        "screenshot_height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot Height"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/ImageRef"
+          },
+          "title": "Images",
+          "type": "array"
+        },
+        "open_tabs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Open Tabs",
+          "type": "array"
+        },
+        "downloads": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Downloads",
+          "type": "array"
+        },
+        "dom_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dom Version"
+        }
+      },
+      "required": [
+        "observation_id",
+        "worker_id",
+        "session_id",
+        "url",
+        "captured_at",
+        "viewport"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "PolicyDecision": {
+      "$defs": {
+        "ActionCategory": {
+          "enum": [
+            "READ",
+            "NAVIGATION",
+            "CREATE_OUTPUT",
+            "DRAFT",
+            "CONSEQUENTIAL",
+            "UNKNOWN_MUTATION",
+            "FORBIDDEN"
+          ],
+          "title": "ActionCategory",
+          "type": "string"
+        },
+        "ErrorCode": {
+          "enum": [
+            "BUDGET_BLOCKED",
+            "WORKER_UNAVAILABLE",
+            "AUTH_REQUIRED",
+            "UNSUPPORTED_MEDIA",
+            "MALFORMED_TOOL_CALL",
+            "UNCERTAIN_SIDE_EFFECT",
+            "EVIDENCE_GAP",
+            "POLICY_DENIED",
+            "APPROVAL_DENIED",
+            "APPROVAL_EXPIRED",
+            "APPROVAL_INVALID",
+            "STALE_OBSERVATION",
+            "STALE_ELEMENT_REF",
+            "STALE_FENCING_TOKEN",
+            "UNSUPPORTED_CAPABILITY",
+            "ROUTE_REJECTED",
+            "LIMIT_EXCEEDED",
+            "SITE_UNAVAILABLE",
+            "VERIFICATION_FAILED",
+            "TIMEOUT",
+            "CANCELLED",
+            "INTERNAL"
+          ],
+          "title": "ErrorCode",
+          "type": "string"
+        },
+        "PolicyVerdict": {
+          "enum": [
+            "ALLOW",
+            "REQUIRE_APPROVAL",
+            "DENY"
+          ],
+          "title": "PolicyVerdict",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "verdict": {
+          "$ref": "#/$defs/PolicyVerdict"
+        },
+        "category": {
+          "$ref": "#/$defs/ActionCategory"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "policy_version": {
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "destination": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Destination"
+        },
+        "consequence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consequence"
+        },
+        "standing_rule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Standing Rule Id"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "verdict",
+        "category",
+        "reason",
+        "policy_version"
+      ],
+      "title": "PolicyDecision",
+      "type": "object"
+    },
+    "RetrievedPage": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "final_url": {
+          "title": "Final Url",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "integer"
+        },
+        "captured_at": {
+          "title": "Captured At",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "html": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Html"
+        },
+        "source_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Date"
+        },
+        "content_sha256": {
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "screenshot_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Screenshot Artifact Id"
+        },
+        "image_urls": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Image Urls",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "provider",
+        "source_url",
+        "final_url",
+        "status",
+        "captured_at",
+        "content_sha256"
+      ],
+      "title": "RetrievedPage",
+      "type": "object"
+    },
+    "SearchResult": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "rank": {
+          "title": "Rank",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "description": "Canonical URL",
+          "title": "Url",
+          "type": "string"
+        },
+        "snippet": {
+          "default": "",
+          "title": "Snippet",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "source_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Date"
+        }
+      },
+      "required": [
+        "provider",
+        "rank",
+        "title",
+        "url",
+        "retrieved_at"
+      ],
+      "title": "SearchResult",
+      "type": "object"
+    },
+    "TaskRequest": {
+      "$defs": {
+        "TaskBudget": {
+          "additionalProperties": false,
+          "properties": {
+            "max_model_spend": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Per-task hosted inference ceiling in budget currency",
+              "title": "Max Model Spend"
+            },
+            "max_actions": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Max Actions"
+            },
+            "max_active_minutes": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Max Active Minutes"
+            }
+          },
+          "title": "TaskBudget",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Created only from an authenticated owner context (channel bridge or owner API token).",
+      "properties": {
+        "goal": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "workflow": {
+          "default": "auto",
+          "enum": [
+            "research_report",
+            "video_analysis",
+            "browser_task",
+            "desktop_workflow",
+            "auto"
+          ],
+          "title": "Workflow",
+          "type": "string"
+        },
+        "constraints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Constraints",
+          "type": "array"
+        },
+        "output_format": {
+          "default": "docx",
+          "enum": [
+            "docx",
+            "docx+pdf",
+            "message"
+          ],
+          "title": "Output Format",
+          "type": "string"
+        },
+        "budget": {
+          "$ref": "#/$defs/TaskBudget"
+        },
+        "source_preference": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "api",
+            "browser"
+          ],
+          "title": "Source Preference",
+          "type": "string"
+        },
+        "sources": {
+          "description": "URLs or domains to use or prefer",
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "attachments": {
+          "description": "Artifact IDs of owner-supplied inputs",
+          "items": {
+            "type": "string"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit job routing to a worker",
+          "title": "Worker Id"
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Workflow parameters (e.g. video url, question)",
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "goal"
+      ],
+      "title": "TaskRequest",
+      "type": "object"
+    },
+    "TaskView": {
+      "$defs": {
+        "ArtifactManifest": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_id": {
+              "title": "Artifact Id",
+              "type": "string"
+            },
+            "task_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Task Id"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "rel_path": {
+              "description": "Path relative to the workspace root",
+              "title": "Rel Path",
+              "type": "string"
+            },
+            "media_type": {
+              "title": "Media Type",
+              "type": "string"
+            },
+            "bytes": {
+              "title": "Bytes",
+              "type": "integer"
+            },
+            "sha256": {
+              "title": "Sha256",
+              "type": "string"
+            },
+            "kind": {
+              "description": "report, evidence, observation, media, input, transfer",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parent_artifact_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Parent Artifact Id"
+            },
+            "crop": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Rect"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "width": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Width"
+            },
+            "height": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Height"
+            },
+            "resize_scale": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Resize Scale"
+            },
+            "source_map": {
+              "additionalProperties": true,
+              "title": "Source Map",
+              "type": "object"
+            },
+            "validation": {
+              "additionalProperties": true,
+              "title": "Validation",
+              "type": "object"
+            },
+            "created_at": {
+              "title": "Created At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "artifact_id",
+            "task_id",
+            "name",
+            "rel_path",
+            "media_type",
+            "bytes",
+            "sha256",
+            "kind",
+            "created_at"
+          ],
+          "title": "ArtifactManifest",
+          "type": "object"
+        },
+        "Rect": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            },
+            "width": {
+              "title": "Width",
+              "type": "number"
+            },
+            "height": {
+              "title": "Height",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "title": "Rect",
+          "type": "object"
+        },
+        "TaskStatus": {
+          "enum": [
+            "QUEUED",
+            "RUNNING",
+            "AWAITING_APPROVAL",
+            "AWAITING_USER",
+            "BLOCKED",
+            "PAUSED",
+            "VERIFYING",
+            "COMPLETED",
+            "PARTIAL",
+            "FAILED",
+            "CANCELLED"
+          ],
+          "title": "TaskStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "workflow": {
+          "title": "Workflow",
+          "type": "string"
+        },
+        "goal": {
+          "title": "Goal",
+          "type": "string"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phase"
+        },
+        "current_step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Step"
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Id"
+        },
+        "blocking_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocking Reason"
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Progress"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactManifest"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "pending_approval_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pending Approval Id"
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "workflow",
+        "goal",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "TaskView",
+      "type": "object"
+    },
+    "WorkerHeartbeat": {
+      "additionalProperties": false,
+      "properties": {
+        "session_epoch": {
+          "title": "Session Epoch",
+          "type": "string"
+        },
+        "busy_job_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Busy Job Id"
+        },
+        "health": {
+          "additionalProperties": true,
+          "title": "Health",
+          "type": "object"
+        }
+      },
+      "required": [
+        "session_epoch"
+      ],
+      "title": "WorkerHeartbeat",
+      "type": "object"
+    },
+    "WorkerJob": {
+      "$defs": {
+        "ExpectedResult": {
+          "additionalProperties": false,
+          "properties": {
+            "url_contains": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Url Contains"
+            },
+            "text_visible": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Text Visible"
+            },
+            "element_value": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Element Value"
+            },
+            "download_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Download Name"
+            },
+            "new_tab": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "New Tab"
+            }
+          },
+          "title": "ExpectedResult",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "action_id": {
+          "title": "Action Id",
+          "type": "string"
+        },
+        "worker_id": {
+          "title": "Worker Id",
+          "type": "string"
+        },
+        "lease_id": {
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "resource": {
+          "title": "Resource",
+          "type": "string"
+        },
+        "fencing_token": {
+          "title": "Fencing Token",
+          "type": "integer"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExpectedResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "deadline": {
+          "title": "Deadline",
+          "type": "string"
+        },
+        "lease_expires_at": {
+          "title": "Lease Expires At",
+          "type": "string"
+        },
+        "issued_at": {
+          "title": "Issued At",
+          "type": "string"
+        },
+        "approval_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Id"
+        },
+        "attachment_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Authorized browser attachment to act in",
+          "title": "Attachment Id"
+        },
+        "declared_inputs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Declared Inputs",
+          "type": "array"
+        },
+        "declared_outputs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Declared Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "job_id",
+        "task_id",
+        "action_id",
+        "worker_id",
+        "lease_id",
+        "resource",
+        "fencing_token",
+        "operation",
+        "idempotency_key",
+        "deadline",
+        "lease_expires_at",
+        "issued_at"
+      ],
+      "title": "WorkerJob",
+      "type": "object"
+    },
+    "WorkerRegistration": {
+      "additionalProperties": false,
+      "properties": {
+        "worker_id": {
+          "title": "Worker Id",
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "session_epoch": {
+          "description": "Unique per worker process start; newer epochs fence out stale processes",
+          "title": "Session Epoch",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "interactive_resources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Interactive Resources",
+          "type": "array"
+        },
+        "attachments": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Platform"
+        }
+      },
+      "required": [
+        "worker_id",
+        "capabilities",
+        "session_epoch",
+        "version"
+      ],
+      "title": "WorkerRegistration",
+      "type": "object"
+    }
+  },
+  "operations": {
+    "browser.back": {
+      "description": "Go back",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "EmptyArgs",
+        "type": "object"
+      }
+    },
+    "browser.click": {
+      "description": "Activate an element by reference",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "maxLength": 64,
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "ClickArgs",
+        "type": "object"
+      }
+    },
+    "browser.click_point": {
+      "description": "Vision-guided coordinate click (fallback)",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "description": "CSS pixels relative to the viewport",
+            "maximum": 20000,
+            "minimum": 0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "maximum": 20000,
+            "minimum": 0,
+            "title": "Y",
+            "type": "number"
+          },
+          "expect_fingerprint": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expect Fingerprint"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "ClickPointArgs",
+        "type": "object"
+      }
+    },
+    "browser.download": {
+      "description": "Download a file",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "maxLength": 64,
+            "title": "Ref",
+            "type": "string"
+          },
+          "expected_extension": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Extension"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "DownloadArgs",
+        "type": "object"
+      }
+    },
+    "browser.fetch_image": {
+      "description": "Fetch an original page image with session cookies",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "src": {
+            "maxLength": 4096,
+            "title": "Src",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          }
+        },
+        "required": [
+          "src"
+        ],
+        "title": "FetchImageArgs",
+        "type": "object"
+      }
+    },
+    "browser.hit_test": {
+      "description": "Identify the element at a viewport point",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "maximum": 20000,
+            "minimum": 0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "maximum": 20000,
+            "minimum": 0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "HitTestArgs",
+        "type": "object"
+      }
+    },
+    "browser.navigate": {
+      "description": "Open a URL",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "maxLength": 2048,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "NavigateArgs",
+        "type": "object"
+      }
+    },
+    "browser.observe": {
+      "description": "Screenshot, element references and text",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "full_page": {
+            "default": false,
+            "title": "Full Page",
+            "type": "boolean"
+          },
+          "include_images": {
+            "default": true,
+            "title": "Include Images",
+            "type": "boolean"
+          },
+          "max_elements": {
+            "default": 250,
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Max Elements",
+            "type": "integer"
+          },
+          "attachment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attachment Id"
+          }
+        },
+        "title": "ObserveArgs",
+        "type": "object"
+      }
+    },
+    "browser.press": {
+      "description": "Press a key or shortcut",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "pattern": "^[A-Za-z0-9+_ -]{1,40}$|^.$",
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "PressArgs",
+        "type": "object"
+      }
+    },
+    "browser.read_page": {
+      "description": "Visible text and controls of the current page",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "attachment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Attachment Id"
+          }
+        },
+        "title": "ReadPageArgs",
+        "type": "object"
+      }
+    },
+    "browser.release": {
+      "description": "Close the task's page",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "EmptyArgs",
+        "type": "object"
+      }
+    },
+    "browser.scroll": {
+      "description": "Scroll the page",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "dx": {
+            "default": 0,
+            "maximum": 10000,
+            "minimum": -10000,
+            "title": "Dx",
+            "type": "integer"
+          },
+          "dy": {
+            "default": 600,
+            "maximum": 10000,
+            "minimum": -10000,
+            "title": "Dy",
+            "type": "integer"
+          }
+        },
+        "title": "ScrollArgs",
+        "type": "object"
+      }
+    },
+    "browser.select": {
+      "description": "Choose an option",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "maxLength": 64,
+            "title": "Ref",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 500,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "value"
+        ],
+        "title": "SelectArgs",
+        "type": "object"
+      }
+    },
+    "browser.type": {
+      "description": "Type into a text field",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "maxLength": 64,
+            "title": "Ref",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "title": "Text",
+            "type": "string"
+          },
+          "clear": {
+            "default": true,
+            "title": "Clear",
+            "type": "boolean"
+          },
+          "submit": {
+            "default": false,
+            "title": "Submit",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ref",
+          "text"
+        ],
+        "title": "TypeArgs",
+        "type": "object"
+      }
+    },
+    "browser.video_frames": {
+      "description": "Seek a page video and capture decoded frames",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ref"
+          },
+          "timestamps": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Timestamps",
+            "type": "array"
+          },
+          "max_side": {
+            "default": 1024,
+            "maximum": 4096,
+            "minimum": 64,
+            "title": "Max Side",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamps"
+        ],
+        "title": "VideoFramesArgs",
+        "type": "object"
+      }
+    },
+    "browser.wait": {
+      "description": "Wait for time or text",
+      "executor": "worker",
+      "capability": "browser",
+      "needs_ui_lease": true,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "ms": {
+            "default": 1000,
+            "maximum": 15000,
+            "minimum": 0,
+            "title": "Ms",
+            "type": "integer"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text"
+          }
+        },
+        "title": "WaitArgs",
+        "type": "object"
+      }
+    },
+    "calendar.draft": {
+      "description": "Create a local calendar preview",
+      "executor": "worker",
+      "capability": "calendar",
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 300,
+            "title": "Title",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "attendees": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Attendees",
+            "type": "array"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Location"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          }
+        },
+        "required": [
+          "title",
+          "start",
+          "end"
+        ],
+        "title": "CalendarDraftArgs",
+        "type": "object"
+      }
+    },
+    "calendar.invite": {
+      "description": "Send calendar invitations",
+      "executor": "worker",
+      "capability": "calendar",
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "draft_artifact_id": {
+            "title": "Draft Artifact Id",
+            "type": "string"
+          },
+          "attendees": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Attendees",
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft_artifact_id",
+          "attendees"
+        ],
+        "title": "CalendarInviteArgs",
+        "type": "object"
+      }
+    },
+    "credential.export": {
+      "description": "Always denied",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "CredentialExportArgs",
+        "type": "object"
+      }
+    },
+    "desktop.raw_input": {
+      "description": "Raw desktop input (blocked by default)",
+      "executor": "worker",
+      "capability": "desktop",
+      "needs_ui_lease": true,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "click",
+              "type",
+              "hotkey",
+              "scroll"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Y"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text"
+          },
+          "keys": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Keys"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "DesktopRawArgs",
+        "type": "object"
+      }
+    },
+    "email.draft": {
+      "description": "Create a local .eml preview",
+      "executor": "worker",
+      "capability": "email",
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "To",
+            "type": "array"
+          },
+          "subject": {
+            "maxLength": 300,
+            "title": "Subject",
+            "type": "string"
+          },
+          "body": {
+            "maxLength": 20000,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "body"
+        ],
+        "title": "EmailDraftArgs",
+        "type": "object"
+      }
+    },
+    "email.send": {
+      "description": "Send an email",
+      "executor": "worker",
+      "capability": "email",
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "draft_artifact_id": {
+            "title": "Draft Artifact Id",
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft_artifact_id",
+          "to"
+        ],
+        "title": "EmailSendArgs",
+        "type": "object"
+      }
+    },
+    "file.delete": {
+      "description": "Delete a file",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "rel_path": {
+            "maxLength": 400,
+            "title": "Rel Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel_path"
+        ],
+        "title": "FileDeleteArgs",
+        "type": "object"
+      }
+    },
+    "file.write": {
+      "description": "Save an artifact to the reports folder (idempotent per action)",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "rel_path": {
+            "maxLength": 400,
+            "title": "Rel Path",
+            "type": "string"
+          },
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rel_path",
+          "artifact_id"
+        ],
+        "title": "FileWriteArgs",
+        "type": "object"
+      }
+    },
+    "media.fetch": {
+      "description": "Download accessible media with yt-dlp",
+      "executor": "worker",
+      "capability": "video",
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "maxLength": 4096,
+            "title": "Url",
+            "type": "string"
+          },
+          "max_height": {
+            "default": 720,
+            "maximum": 2160,
+            "minimum": 144,
+            "title": "Max Height",
+            "type": "integer"
+          },
+          "max_filesize_mb": {
+            "default": 500,
+            "maximum": 4000,
+            "minimum": 1,
+            "title": "Max Filesize Mb",
+            "type": "integer"
+          },
+          "want_subtitles": {
+            "default": true,
+            "title": "Want Subtitles",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "MediaFetchArgs",
+        "type": "object"
+      }
+    },
+    "message.send": {
+      "description": "Message another person",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "recipient": {
+            "maxLength": 200,
+            "title": "Recipient",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient",
+          "text"
+        ],
+        "title": "MessageSendArgs",
+        "type": "object"
+      }
+    },
+    "permission.change": {
+      "description": "Change a permission",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "change": {
+            "title": "Change",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "change"
+        ],
+        "title": "PermissionChangeArgs",
+        "type": "object"
+      }
+    },
+    "search.query": {
+      "description": "Search through the configured search adapter",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "limit": {
+            "default": 8,
+            "maximum": 20,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchQueryArgs",
+        "type": "object"
+      }
+    },
+    "spreadsheet.read": {
+      "description": "Read workbook cells",
+      "executor": "worker",
+      "capability": "spreadsheet",
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sheet"
+          },
+          "cell_range": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{1,3}[0-9]{1,7}(:[A-Z]{1,3}[0-9]{1,7})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cell Range"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "title": "SpreadsheetReadArgs",
+        "type": "object"
+      }
+    },
+    "spreadsheet.write": {
+      "description": "Write cells to a new workbook copy",
+      "executor": "worker",
+      "capability": "spreadsheet",
+      "needs_ui_lease": false,
+      "retry_safe": false,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sheet"
+          },
+          "cells": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 500,
+            "title": "Cells",
+            "type": "object"
+          },
+          "output_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Output Name"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "cells"
+        ],
+        "title": "SpreadsheetWriteArgs",
+        "type": "object"
+      }
+    },
+    "telegram.send_owner": {
+      "description": "Send a result to the owner (outbox-deduplicated per action)",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 4000,
+            "title": "Text",
+            "type": "string"
+          },
+          "artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Artifact Id"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SendOwnerArgs",
+        "type": "object"
+      }
+    },
+    "web.fetch_image": {
+      "description": "Fetch a public image without the owner's cookies",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "src": {
+            "maxLength": 4096,
+            "title": "Src",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          }
+        },
+        "required": [
+          "src"
+        ],
+        "title": "FetchImageArgs",
+        "type": "object"
+      }
+    },
+    "web.retrieve": {
+      "description": "Retrieve a page through the configured retrieval adapter",
+      "executor": "coordinator",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "maxLength": 2048,
+            "title": "Url",
+            "type": "string"
+          },
+          "formats": {
+            "items": {
+              "enum": [
+                "markdown",
+                "html",
+                "screenshot",
+                "links"
+              ],
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "RetrieveArgs",
+        "type": "object"
+      }
+    },
+    "worker.reconcile": {
+      "description": "Ask a worker whether an action already executed",
+      "executor": "worker",
+      "capability": null,
+      "needs_ui_lease": false,
+      "retry_safe": true,
+      "arguments": {
+        "additionalProperties": false,
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "original_operation": {
+            "title": "Original Operation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "original_operation"
+        ],
+        "title": "ReconcileArgs",
+        "type": "object"
+      }
+    }
+  }
+}

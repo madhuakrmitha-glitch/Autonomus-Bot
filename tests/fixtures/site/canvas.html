@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><title>Canvas target</title><style>body{margin:0;background:#f4f4f4} #status{position:absolute;left:20px;top:20px;font:20px sans-serif}</style></head>
+<body>
+<canvas id="c" width="1280" height="800" style="width:1280px;height:800px;display:block"></canvas>
+<div id="status">Click the red target</div>
+<script>
+  const TX = 937, TY = 563, R = 22;
+  const c = document.getElementById("c"), g = c.getContext("2d");
+  g.fillStyle = "#f4f4f4"; g.fillRect(0, 0, 1280, 800);
+  g.fillStyle = "#3a6ea5"; g.beginPath(); g.arc(300, 300, 30, 0, 7); g.fill();
+  g.fillStyle = "#e01010"; g.beginPath(); g.arc(TX, TY, R, 0, 7); g.fill();
+  c.addEventListener("click", (e) => {
+    const r = c.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const hit = Math.hypot(x - TX, y - TY) <= R;
+    document.getElementById("status").textContent = hit ? "Target hit" : "Missed at " + Math.round(x) + "," + Math.round(y);
+    if (hit) document.title = "HIT";
+  });
+</script>
+</body></html>

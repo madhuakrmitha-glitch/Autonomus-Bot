@@ -1,0 +1,10 @@
+<!doctype html>
+<html><head><title>Session fixture</title></head>
+<body style="font-family:sans-serif;margin:40px">
+<p id="s"></p>
+<script>
+  const m = document.cookie.match(/omca_session=([^;]+)/);
+  if (m) { document.getElementById("s").textContent = "Signed in as " + m[1]; }
+  else { document.cookie = "omca_session=owner-42; max-age=3600; path=/"; document.getElementById("s").textContent = "New session started"; }
+</script>
+</body></html>
