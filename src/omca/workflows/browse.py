@@ -15,6 +15,7 @@ from typing import Any
 from ..contracts import ExpectedResult, Observation
 from ..engine import ActionOutcome, WorkflowOutcome
 from ..evidence import locate_excerpt
+from ..models.registry import RouteRejected
 from ..models.types import ImageInput, ImageTransform
 from ..util import now_iso, parse_iso, truncate, utcnow
 from .common import model_json, system_prompt, untrusted
@@ -99,7 +100,10 @@ async def browser_task(ctx) -> WorkflowOutcome:
     if att is None or not att.authorized:
         return WorkflowOutcome("FAILED", "No explicitly authorized browser session is configured for this task.",
                                error_code="AUTH_REQUIRED")
-    route = c.registry.chain("vision", {"text", "image"})[0]
+    try:
+        route = c.registry.chain("vision", {"text", "image"})[0]
+    except RouteRejected as exc:
+        return WorkflowOutcome("FAILED", f"No usable open vision route: {exc}", error_code="ROUTE_REJECTED")
     start = req.params.get("url") or (URL.search(ctx.task.goal).group(0) if URL.search(ctx.task.goal) else None)
     max_steps = min(int(req.params.get("max_steps", 25)), cfg.limits.max_actions_per_task)
 
@@ -170,7 +174,7 @@ async def browser_task(ctx) -> WorkflowOutcome:
         if name == "ask_owner":
             answer = await ctx.ask_owner(str(a.get("question") or "Please advise."), key=f"q:{step}")
             history.append(f"{step}. asked owner; answer: {truncate(answer or '(no answer)', 200)}")
-            obs = None  # the page may have changed while waiting (e.g. manual login)
+            # the page may have changed while waiting (e.g. a manual login), so observe it again
             obs = (await ctx.act("browser.observe", {}, key=f"obs:after-ask:{step}", attachment_id=att.id)).obs
             continue
         if name == "click":
