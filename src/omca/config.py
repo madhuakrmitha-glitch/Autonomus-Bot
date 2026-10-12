@@ -90,6 +90,10 @@ class ServerConfig(_Base):
         return validate_ref(v, f"server.{info.field_name}")
 
 
+class UiConfig(_Base):
+    enabled: bool = Field(default=False, description="Serve the local owner web UI at /ui (owner API token required)")
+
+
 class StorageConfig(_Base):
     data_dir: Path = Path("./data")
     workspace_root: Path = Path("./workspace")
@@ -443,6 +447,7 @@ class ApplicationConfig(_Base):
     owner: OwnerConfig = Field(default_factory=OwnerConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
+    ui: UiConfig = Field(default_factory=UiConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)

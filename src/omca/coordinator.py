@@ -16,6 +16,7 @@ from typing import Any
 from .artifacts import ArtifactError, ArtifactStore
 from .budget import BudgetLedger
 from .channels import Channel, Notifier
+from .channels.web import WebInbox
 from .config import ApplicationConfig, BrowserAttachment
 from .contracts import (
     ActionIntent,
@@ -83,7 +84,8 @@ class Coordinator:
         self.observations = ObservationStore(self.db)
         self.memory = MemoryStore(self.db)
         self.search = search or SearchService.from_config(config)
-        self.notifier = Notifier(self.db, config, channel)
+        self.web_inbox = WebInbox(self.db) if config.ui.enabled else None
+        self.notifier = Notifier(self.db, config, channel, self.web_inbox)
         from .workflows import WORKFLOWS
 
         self.engine = TaskEngine(self, WORKFLOWS)

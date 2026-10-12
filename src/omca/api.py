@@ -18,7 +18,7 @@ import json
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from . import __version__
@@ -82,6 +82,14 @@ class BridgeCallback(BaseModel):
 
 class FireRequest(BaseModel):
     planned_at: str | None = None
+
+
+class UiCallback(BaseModel):
+    data: str
+
+
+UI_IDENTITY = Identity("owner_api", "web-ui")
+UI_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
 def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
@@ -279,6 +287,62 @@ def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
         m = coord.artifacts.get(artifact_id)
         return Response(coord.artifacts.read_bytes(artifact_id), media_type=m.media_type if m else "application/octet-stream",
                         headers={"X-OMCA-SHA256": m.sha256 if m else ""})
+
+    # -- local web UI ----------------------------------------------------------------------------------------
+    if coord.web_inbox is not None:
+        inbox = coord.web_inbox
+
+        @app.get("/ui", tags=["ui"], response_class=HTMLResponse, include_in_schema=False)
+        def ui_page() -> HTMLResponse:
+            from importlib import resources
+
+            return HTMLResponse((resources.files("omca.web") / "index.html").read_text(encoding="utf-8"),
+                                headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY",
+                                         "Referrer-Policy": "no-referrer"})
+
+        @app.get("/ui/api/messages", tags=["ui"], summary="Conversation changes since a revision")
+        def ui_messages(after: int = 0, ident: Identity = Depends(owner)) -> dict[str, Any]:
+            items = inbox.feed(after)
+            return {"messages": items, "rev": items[-1]["rev"] if items else after}
+
+        @app.post("/ui/api/messages", tags=["ui"], summary="Send an owner message or command from the web UI")
+        async def ui_send(text: str = Form(default=""), files: list[UploadFile] = File(default=[]),
+                          ident: Identity = Depends(owner)) -> dict[str, Any]:
+            from .util import new_id
+
+            attachments = []
+            for f in files[:10]:
+                data = await f.read(UI_MAX_UPLOAD_BYTES + 1)
+                if len(data) > UI_MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, f"{f.filename} is larger than 20 MB")
+                attachments.append((f.filename or "file", data))
+            if not text.strip() and not attachments:
+                raise HTTPException(400, "empty message")
+            names = ", ".join(n for n, _ in attachments)
+            inbox.add("owner", text.strip() + (f"\n[attached: {names}]" if names else ""))
+            reply = await iface.handle_message(UI_IDENTITY, text, update_id=new_id("web"), attachments=attachments)
+            if reply:
+                inbox.add("assistant", reply)
+            await coord.notifier.flush()
+            return {"reply": reply}
+
+        @app.post("/ui/api/callback", tags=["ui"], summary="Press an inline button (approvals) from the web UI")
+        async def ui_callback(body: UiCallback, ident: Identity = Depends(owner)) -> dict[str, Any]:
+            from .util import new_id
+
+            reply = await iface.handle_callback(UI_IDENTITY, body.data, callback_id=new_id("webcb"))
+            await coord.notifier.flush()
+            return {"reply": reply}
+
+        @app.get("/ui/api/files/{message_id}", tags=["ui"], response_class=Response)
+        def ui_file(message_id: int, ident: Identity = Depends(owner)) -> Response:
+            doc = inbox.document(message_id)
+            if doc is None:
+                raise HTTPException(404, "unknown document")
+            name, data = doc
+            safe = name.replace('"', "").replace("\r", "").replace("\n", "")
+            return Response(data, media_type="application/octet-stream",
+                            headers={"Content-Disposition": f'attachment; filename="{safe}"'})
 
     # -- OpenClaw bridge -------------------------------------------------------------------------------------
     @app.post("/bridge/openclaw/message", tags=["bridge"], dependencies=[Depends(bridge)],

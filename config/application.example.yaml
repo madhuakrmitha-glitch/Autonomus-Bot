@@ -32,6 +32,9 @@ server:
   model_gateway_token_ref: keyring:omca/model-gateway-token  # OpenClaw custom provider (OMCA_MODEL_GATEWAY_TOKEN)
   approval_signing_key_ref: null   # null: a key is generated under data/secrets on first run
 
+ui:
+  enabled: true                    # local owner web UI at http://127.0.0.1:8765/ui (`omca ui` opens it signed in)
+
 storage:
   data_dir: ../data                # SQLite database, worker cache, generated signing key
   workspace_root: ../workspace     # tasks/<task-id>/{inputs,observations,evidence,media,reports,outputs}

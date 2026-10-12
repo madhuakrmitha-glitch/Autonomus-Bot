@@ -17,13 +17,15 @@ from ..contracts import ApprovalRequest
 from ..db import Database, dumps, loads
 from ..util import digest, display_time, new_id, now_iso
 from .base import Buttons, Channel
+from .web import WebInbox
 
 
 class Notifier:
-    def __init__(self, db: Database, config: ApplicationConfig, channel: Channel | None):
+    def __init__(self, db: Database, config: ApplicationConfig, channel: Channel | None, web: WebInbox | None = None):
         self.db = db
         self.config = config
         self.channel = channel
+        self.web = web
         self._wake = asyncio.Event()
 
     def owner_chat(self) -> str | None:
@@ -82,14 +84,20 @@ class Notifier:
         return loads(r["result_json"], {})
 
     async def flush(self, limit: int = 50) -> int:
-        if self.channel is None:
-            return 0
-        chat = self.owner_chat()
-        if chat is None:
+        chat = self.owner_chat() if self.channel is not None else None
+        if chat is None and self.web is None:
             return 0
         rows = self.db.query("SELECT * FROM outbox WHERE status='PENDING' ORDER BY created_at LIMIT ?", (limit,))
         sent = 0
         for r in rows:
+            web_id = self.web.mirror(r) if self.web is not None else None
+            if chat is None:
+                # no Telegram delivery configured: the local web UI is the owner's channel
+                res = {"chat_id": "web", "message_id": str(web_id)} if web_id is not None else {"chat_id": "web"}
+                self.db.execute("UPDATE outbox SET status='SENT', result_json=?, sent_at=?, attempts=attempts+1 WHERE id=?",
+                                (dumps(res), now_iso(), r["id"]))
+                sent += 1
+                continue
             payload = loads(r["payload_json"], {})
             try:
                 if r["kind"] == "text":

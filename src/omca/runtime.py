@@ -19,8 +19,9 @@ def build_channel(config: ApplicationConfig):
         return None
     token = resolve(config.telegram.bot_token_ref)
     if not token:
-        log.warning("Telegram bot token is not available (%s); owner messages cannot be delivered",
-                    config.telegram.bot_token_ref)
+        log.warning("Telegram bot token is not available (%s); owner messages %s",
+                    config.telegram.bot_token_ref,
+                    "go to the web UI only" if config.ui.enabled else "cannot be delivered")
         return None
     from .channels.telegram import TelegramBotApi
 
