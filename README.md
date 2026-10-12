@@ -32,7 +32,7 @@ Telegram owner ──► OpenClaw gateway ──► OMCA plugin + MCP tools ─�
 | P2 | Website video analysis (frames + transcript), scheduled research | Implemented; AT16-AT21 pass on local fixtures |
 | P3 | Second VM, explicit job routing, bounded desktop/office workflow | Implemented; AT22-AT25 pass on local fixtures |
 
-The deterministic suite (`92` tests) runs without API keys. **Production enablement still requires** the
+The deterministic suite (`148` tests) runs without API keys. **Production enablement still requires** the
 owner-side steps in [docs/operator-guide.md](docs/operator-guide.md): real secrets, a probed open-model
 route, an authorized browser profile and a recovery demonstration. Known limitations are listed in
 [docs/limitations.md](docs/limitations.md).
@@ -41,8 +41,9 @@ route, an authorized browser profile and a recovery demonstration. Known limitat
 
 ```bash
 uv sync --extra browser --extra video --extra mcp      # Python 3.11+; installs pinned versions from uv.lock
-uv run pytest                                          # 92 deterministic acceptance and unit tests
+uv run pytest                                          # 148 deterministic tests (4 live tests skip)
 uv run omca fixtures --repeat 3                        # release record: three consecutive runs + versions
+                                                       # (latest record: docs/release/)
 ```
 
 Playwright needs Chromium (`uv run playwright install chromium`) and the video tests need `ffmpeg` on PATH.

@@ -2,7 +2,9 @@
 
 Machine-readable acceptance inventory: [`tests/acceptance_cases.json`](../tests/acceptance_cases.json)
 (each case's tests carry `@pytest.mark.acceptance("ATxx")`; `tests/test_traceability.py` fails if a case or
-an FR is left uncovered).
+an FR is left uncovered). `tests/test_review_regressions.py` pins the fixes from the pre-handoff safety
+review (approval revalidation, worker fencing, network destinations, email recipients, budget and
+endpoint accounting, standing rules), one test per failure mode.
 
 ## Functional requirements
 

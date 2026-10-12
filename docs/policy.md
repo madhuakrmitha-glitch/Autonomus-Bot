@@ -9,11 +9,11 @@ inspects the target, destination and current observation.
 | Category | Examples | Verdict |
 |---|---|---|
 | `READ` | search API, page retrieval, screenshots, observation, image fetch, wait | Allow within task and resource scope |
-| `NAVIGATION` | links with a real `href`, tabs, `<summary>`, disclosure buttons (`aria-expanded`) outside forms, scrolling, navigation keys | Allow |
+| `NAVIGATION` | links to another page, tabs, `<summary>`, disclosure buttons (`aria-expanded`) outside forms, scrolling, navigation keys | Allow |
 | `DRAFT` | typing into ordinary text fields, checkboxes/selects, local email/calendar previews | Allow (no external effect) |
 | `CREATE_OUTPUT` | new report in the reports folder, new workbook copy | Allow; never overwrites |
 | `CONSEQUENTIAL` | form submission (any submit control inside a form, Enter in a form field, Ctrl+Enter, Ctrl+S), send, purchase, delete, publish, share, invite, permission change, overwrite | **Approval** of the exact action |
-| `UNKNOWN_MUTATION` | buttons with no recognisable consequence, canvas clicks, app keyboard shortcuts outside text fields, toggles, raw desktop input | **Approval** (or a narrow standing rule) until a reviewed adapter exists |
+| `UNKNOWN_MUTATION` | buttons with no recognisable consequence, same-page links (`#...`, which a script handles), canvas clicks, app keyboard shortcuts outside text fields, toggles, an image fetch *with the session's cookies* from a state-changing URL, raw desktop input | **Approval** (or a narrow standing rule) until a reviewed adapter exists |
 | `FORBIDDEN` | credential entry or export, unexpected recipients, `javascript:`/`file:`/`data:` URLs, private hosts not allowed, unknown operations | **Deny**; never inferred approval |
 
 Element names come from page content and are untrusted: they can only make a classification *stricter*
@@ -23,13 +23,20 @@ it navigation.
 ## Approval binding
 
 An approval binds: owner, task, action id, operation, arguments (minus ephemeral element refs), target
-fingerprint, destination, preconditions (page origin + element fingerprint/role/name, or file/draft
-hashes), policy version, expiry (15 min) and a random nonce. The binding is HMAC-signed with the approval
-signing key and the nonce is consumed in one database transaction. Before execution the coordinator
-re-observes, re-resolves the element by fingerprint and recomputes the preconditions; any change in
-inputs, destination, state, owner, policy version, signature or expiry refuses the action
-(`INVALIDATED`/`EXPIRED`) and the owner is told. Approvers are authenticated separately from ordinary bot
-access (`owner.approver_user_ids`).
+fingerprint, destination, preconditions (page origin and URL + element fingerprint/role/name, or
+file/draft hashes), policy version, expiry (15 min) and a random nonce. The binding is HMAC-signed with
+the approval signing key and the nonce is consumed in one database transaction. Before execution the
+coordinator re-observes the live page, re-resolves the element by fingerprint (for a key press: the
+element that has focus now; for a coordinate click: the element under the point now), classifies the
+action again against that live state and recomputes the preconditions. A live verdict of *deny*, a
+different destination, or any change in inputs, state, owner, policy version, signature or expiry refuses
+the action (`INVALIDATED`/`EXPIRED`) and the owner is told. The worker checks the target once more
+immediately before acting (focused element, element under the point, element fingerprint). Approvers are
+authenticated separately from ordinary bot access (`owner.approver_user_ids`).
+
+An action may only use artifacts the task produced or the owner attached to it: a draft from another
+task cannot be sent by this one. The email approval shows the recipients, subject and body exactly as
+drafted.
 
 While waiting for a decision the task releases the VM's UI lease (other tasks may use the desktop); the
 revalidation step is what makes that safe.
@@ -59,6 +66,19 @@ actions. Recurring schedules never grant new permissions.
 
 Sends and invitations may only target `policy.contacts`. Anything else is `FORBIDDEN` - the owner is not
 even asked, so a compromised page or model cannot obtain an approval prompt for an attacker's address.
+The worker sends with exactly the approved addresses as the SMTP envelope and refuses a draft that carries
+`Cc`, `Bcc` or `Resent-*` recipients.
+
+## Network destinations
+
+The assistant does not reach the owner's private network unless allowed: hosts in
+`search.allowed_private_hosts` (coordinator fetches) and origins in a browser attachment's
+`allowed_private_origins` (that worker's browser and media downloads). Private hosts are recognised in
+every spelling (`127.1`, `2130706433`, `0x7f.0.0.1`, IPv4-mapped IPv6, `*.localhost`, `*.local`,
+single-label names), and URLs with embedded credentials or backslashes are refused. Fetchers also resolve
+names and refuse ones that point to private addresses, and they follow redirects themselves, checking
+every hop. Browser task pages refuse requests to private hosts, and the landing URL is checked after every
+action because the browser follows HTTP redirects itself.
 
 ## Prompt injection (AT15)
 

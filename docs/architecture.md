@@ -10,7 +10,7 @@ its tools are restricted to the coordinator's MCP tools.
 |---|---|---|---|
 | OpenClaw gateway | Telegram connection, owner routing, conversation | `integrations/openclaw/omca-plugin/`, `src/omca/integrations/openclaw.py` (config translation) | Framework session state |
 | Coordinator extension | Task decomposition, durable workflow state, verification | `coordinator.py`, `engine.py`, `tasks.py`, `workflows/` | `tasks`, `task_steps`, `actions`, `task_events` |
-| Policy service | Classify operations, bind approvals, deny ambiguous consequential actions | `policy/operations.py`, `policy/gate.py`, `policy/approvals.py` | `policy_versions`, `approvals`, `standing_rule_uses` |
+| Policy service | Classify operations, bind approvals, deny ambiguous consequential actions, refuse private network destinations | `policy/operations.py`, `policy/gate.py`, `policy/approvals.py`, `netguard.py` | `policy_versions`, `approvals`, `standing_rule_uses` |
 | Model adapter | Open-model registry, modality checks, prompt assembly, provider compatibility, usage | `models/registry.py`, `models/router.py`, `models/providers.py`, `models/probes.py`, `models/gateway.py`, `models/endpoints.py` | `model_calls`, `route_probes`, `endpoint_sessions` |
 | Budget | Atomic reservations, settlement, thresholds | `budget.py` | `model_calls`, `budget_notices` |
 | Worker manager | Registration, capabilities, leases, dispatch, health, cancellation | `workers.py` | `workers`, `leases`, `resources`, `jobs` |

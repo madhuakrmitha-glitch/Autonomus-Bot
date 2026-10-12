@@ -19,8 +19,8 @@ repository; everything else needs the owner-side validation listed in the operat
 
 ## Design limitations
 
-1. **Classification is heuristic.** Disclosure buttons (`aria-expanded`) outside forms and links with real
-   URLs are treated as navigation. A hostile page could disguise a mutating control as one of these, and a
+1. **Classification is heuristic.** Disclosure buttons (`aria-expanded`) outside forms and links to other
+   pages are treated as navigation (same-page `#` links need approval). A hostile page could disguise a mutating control as one of these, and a
    GET URL with side effects outside the recognised path patterns is treated as navigation. Everything else
    that mutates needs approval; use standing rules sparingly.
 2. **Page structure coverage.** Element references are collected from the top document; shadow DOM and
@@ -54,7 +54,17 @@ repository; everything else needs the owner-side validation listed in the operat
     configured; prefer `server.approval_signing_key_ref` pointing to the credential store.
 14. **Owner steering by reply** works for messages the coordinator delivered (mapped through the outbox);
     otherwise use `/steer <id> <text>`.
-15. **No automatic redaction of personal information in screenshots.** Browser screenshots stay temporary
+15. **Network checks have known gaps.** A name is resolved for the check and again by the HTTP client,
+    so a DNS answer that changes in between (rebinding) is not caught. When the browser follows an HTTP
+    redirect to a private host, that request has already been sent when the landing URL is refused (the
+    page is cleared and nothing is observed). Redirects inside yt-dlp's own downloads are not checked hop by
+    hop; the page URL and the media URLs it lists are. With an outbound proxy, the proxy resolves names.
+16. **Cancelling a task does not interrupt a mutation already running on a worker.** Read-only jobs are
+    interrupted; a mutation (send, click, write) is allowed to finish so its outcome is recorded instead of
+    becoming uncertain.
+17. **Token estimates are still estimates.** Non-Latin text is counted conservatively by UTF-8 bytes; a call
+    that costs more than its reservation is flagged in the ledger and the owner is told.
+18. **No automatic redaction of personal information in screenshots.** Browser screenshots stay temporary
     observations (7-day retention) and are never put into reports or sent anywhere automatically; reports
     only embed images fetched from the cited sources. If the owner asks for a screenshot (`task_image`), it
     is delivered to the owner's own DM as captured.
