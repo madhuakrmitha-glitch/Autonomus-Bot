@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -28,6 +27,9 @@ def _print(obj: Any) -> None:
 
 def cmd_init(args: argparse.Namespace) -> int:
     """Create config/application.yaml and config/worker.yaml from the shipped examples."""
+    from .platforms import adapt_example, current
+
+    platform = current() if args.platform == "auto" else args.platform
     root = Path(args.dir).resolve()
     cfg_dir = root / "config"
     cfg_dir.mkdir(parents=True, exist_ok=True)
@@ -41,9 +43,45 @@ def cmd_init(args: argparse.Namespace) -> int:
         if not src.exists():
             print(f"example not found: {src}", file=sys.stderr)
             return 1
-        shutil.copyfile(src, dst)
-        print(f"created {dst}")
+        dst.write_text(adapt_example(src.read_text(encoding="utf-8"), platform), encoding="utf-8")
+        print(f"created {dst} ({platform} defaults)")
     print("Next: store secrets with `omca secrets set <keyring:...>` and fill owner, model and worker settings.")
+    return 0
+
+
+def cmd_service(args: argparse.Namespace) -> int:
+    """Start OMCA in the logged-in user's graphical session (macOS LaunchAgent; Windows: see the script)."""
+    import subprocess
+
+    from .platforms import current, find_uv, gui_domain, launch_agent_path, launch_agent_plist
+
+    platform = current()
+    app_dir = Path(args.app_dir).resolve()
+    if args.action == "show" or platform != "macos":
+        if platform == "windows" and args.action != "show":
+            print("On Windows run: scripts\\windows\\register-tasks.ps1 -AppDir <repo> -Mode all-in-one -WorkerId vm1")
+            return 1
+        uv = args.uv or "/opt/homebrew/bin/uv"
+        sys.stdout.write(launch_agent_plist(mode=args.mode, app_dir=app_dir, uv=uv, worker_id=args.worker_id,
+                                            keep_display_awake=args.keep_display_awake).decode("utf-8"))
+        return 0
+    path = launch_agent_path(args.mode)
+    if args.action == "uninstall":
+        subprocess.run(["launchctl", "bootout", gui_domain(), str(path)], check=False)
+        path.unlink(missing_ok=True)
+        print(f"removed {path}")
+        return 0
+    uv = args.uv or find_uv()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    (Path.home() / "Library" / "Logs" / "OMCA").mkdir(parents=True, exist_ok=True)
+    subprocess.run(["launchctl", "bootout", gui_domain(), str(path)], check=False, capture_output=True)
+    path.write_bytes(launch_agent_plist(mode=args.mode, app_dir=app_dir, uv=uv, worker_id=args.worker_id,
+                                        keep_display_awake=args.keep_display_awake))
+    res = subprocess.run(["launchctl", "bootstrap", gui_domain(), str(path)], check=False, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"launchctl bootstrap failed: {res.stderr.strip()}", file=sys.stderr)
+        return 1
+    print(f"installed and started {path}\nlogs: ~/Library/Logs/OMCA/")
     return 0
 
 
@@ -219,7 +257,18 @@ def main(argv: list[str] | None = None) -> int:
 
     s = sub.add_parser("init", help="create configuration files from the examples")
     s.add_argument("--dir", default=".")
+    s.add_argument("--platform", choices=["auto", "windows", "macos", "linux"], default="auto")
     s.set_defaults(fn=cmd_init)
+
+    s = sub.add_parser("service", help="run OMCA at log in, in the graphical session (macOS LaunchAgent)")
+    s.add_argument("action", choices=["install", "uninstall", "show"])
+    s.add_argument("--mode", choices=["all-in-one", "coordinator", "worker"], default="all-in-one")
+    s.add_argument("--worker-id", default="vm1")
+    s.add_argument("--app-dir", default=".")
+    s.add_argument("--uv", help="path to uv (detected by default)")
+    s.add_argument("--keep-display-awake", action="store_true",
+                   help="also keep the display awake (needed for raw desktop input)")
+    s.set_defaults(fn=cmd_service)
 
     s = sub.add_parser("run", help="run the coordinator service (API, scheduler, Telegram)")
     s.add_argument("--config", default=DEFAULT_CONFIG)

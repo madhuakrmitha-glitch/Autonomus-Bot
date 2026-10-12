@@ -47,9 +47,20 @@ uv run omca fixtures --repeat 3                        # release record: three c
 
 Playwright needs Chromium (`uv run playwright install chromium`) and the video tests need `ffmpeg` on PATH.
 
+## Platforms
+
+| Platform | Coordinator | Worker (browser, media, office) | Raw desktop input | Autostart in the desktop session | Guide |
+|---|---|---|---|---|---|
+| Windows 10/11 (reference) | yes | yes | pywinauto | `scripts/windows/register-tasks.ps1` | [operator-guide.md](docs/operator-guide.md) |
+| macOS 13+ (Apple silicon or Intel) | yes | yes | pyautogui (Accessibility permission) | `omca service install` (LaunchAgent) | [macos.md](docs/macos.md) |
+| Linux | yes | browser, media, office | no | systemd user unit (not provided) | development and CI |
+
+Workers talk to the coordinator over HTTPS, so a Mac coordinator can drive Windows VM workers and vice versa.
+
 ## Running it for real (Windows)
 
-Full, step-by-step instructions: **[docs/operator-guide.md](docs/operator-guide.md)**. In short:
+Full, step-by-step instructions: **[docs/operator-guide.md](docs/operator-guide.md)** (macOS:
+**[docs/macos.md](docs/macos.md)**). In short:
 
 ```powershell
 uv sync --extra all                                    # on the Windows VM

@@ -24,7 +24,7 @@ dependencies = [
 browser = ["playwright==1.56.0"]
 video = ["yt-dlp>=2025.1.1", "faster-whisper>=1.1"]
 mcp = ["mcp>=2.3,<3"]
-desktop = ["pywinauto>=0.6.9; sys_platform == 'win32'"]
+desktop = ["pywinauto>=0.6.9; sys_platform == 'win32'", "pyautogui>=0.9.54; sys_platform == 'darwin'"]
 all = ["omca[browser,video,mcp,desktop]"]
 
 [dependency-groups]

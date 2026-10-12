@@ -323,6 +323,11 @@ class BrowserAttachment(_Base):
     def lease_resource(self) -> str:
         return self.resource or f"{self.worker_id}:ui"
 
+    @field_validator("user_data_dir")
+    @classmethod
+    def _expand(cls, v: str | None) -> str | None:
+        return os.path.expanduser(os.path.expandvars(v)) if v else v
+
     @model_validator(mode="after")
     def _check(self) -> BrowserAttachment:
         if self.mode == "cdp":
@@ -533,6 +538,7 @@ def load_worker_config(path: str | Path) -> WorkerProcessConfig:
     path = Path(path)
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     cfg = WorkerProcessConfig.model_validate(data)
+    cfg.workspace_dir = Path(os.path.expandvars(str(cfg.workspace_dir))).expanduser()
     if not cfg.workspace_dir.is_absolute():
         cfg.workspace_dir = (path.parent / cfg.workspace_dir).resolve()
     return cfg

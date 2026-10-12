@@ -1,6 +1,8 @@
 # Operator guide (Windows)
 
-This walks from an empty Windows VM to the P1 release gate, then P2 and P3. Commands are PowerShell
+This walks from an empty Windows VM to the P1 release gate, then P2 and P3. Running on a Mac instead? Follow
+[macos.md](macos.md) for installation, secrets, autostart and permissions; the remaining sections here apply
+unchanged. Commands are PowerShell
 unless noted. Decisions the spec leaves to kickoff (§23) are called out as **Decide**.
 
 ## 0. Kickoff decisions

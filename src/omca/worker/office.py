@@ -9,7 +9,7 @@ Each adapter does one narrow, reviewed thing:
   only run after the coordinator consumed an owner approval bound to the exact draft hash
   and recipients (the policy layer also rejects recipients outside the contact list).
 * ``desktop.raw_input`` exists for completeness but is classified UNKNOWN_MUTATION and is
-  executed only on Windows after approval.
+  executed only after approval, on Windows (pywinauto) or macOS (pyautogui; Accessibility permission).
 """
 
 from __future__ import annotations
@@ -186,22 +186,19 @@ def make_office_handlers(smtp: SmtpConfig | None = None) -> dict[str, Any]:
         return HandlerResult(result={"sent": True, "attendees": a["attendees"], **res})
 
     async def raw_input(job: WorkerJob, ctx: JobContext) -> HandlerResult:
-        if sys.platform != "win32":
-            raise JobFailure(ErrorCode.UNSUPPORTED_CAPABILITY, "raw desktop input is only available on Windows workers")
-        try:
-            from pywinauto import keyboard, mouse  # type: ignore[import-not-found]
-        except ImportError as exc:
-            raise JobFailure(ErrorCode.UNSUPPORTED_CAPABILITY, "pywinauto is not installed (pip install omca[desktop])") from exc
+        from .desktop import backend_for_platform
+
+        backend = backend_for_platform()
         a = job.arguments
         if a["action"] == "click":
-            mouse.click(coords=(int(a["x"]), int(a["y"])))
+            await asyncio.to_thread(backend.click, int(a["x"]), int(a["y"]))
         elif a["action"] == "type":
-            keyboard.send_keys(a.get("text") or "", with_spaces=True, pause=0.02)
+            await asyncio.to_thread(backend.type_text, a.get("text") or "")
         elif a["action"] == "hotkey":
-            keyboard.send_keys(a.get("keys") or "")
+            await asyncio.to_thread(backend.hotkey, a.get("keys") or "")
         elif a["action"] == "scroll":
-            mouse.scroll(coords=(int(a.get("x") or 0), int(a.get("y") or 0)), wheel_dist=-3)
-        return HandlerResult(result={"performed": a["action"]})
+            await asyncio.to_thread(backend.scroll, int(a.get("x") or 0), int(a.get("y") or 0))
+        return HandlerResult(result={"performed": a["action"], "platform": sys.platform})
 
     return {
         "spreadsheet.read": sheet_read,

@@ -9,6 +9,8 @@ Python dependencies are locked in `uv.lock`; the versions below are those the fi
 | Component | Version | Role | How verified |
 |---|---|---|---|
 | Python | 3.11+ (tested 3.13) | Coordinator and worker runtime | Fixture suite |
+| Operating systems | Windows 10/11 (reference), macOS 13+, Linux (development) | Coordinator and workers | Fixture suite on Linux; platform logic unit-tested; real Windows/macOS runs pending |
+| pyautogui | 0.9.54+ (macOS only, `desktop` extra) | Raw desktop input on macOS | Key mapping unit-tested |
 | OpenClaw | 2026.10.2 (pinned) | Gateway, Telegram, conversation | Plugin type-checked against its SDK `.d.ts`; runtime needs Node ≥ 24.16 |
 | Playwright (Python) | 1.56.0 (Chromium build 1194) | Browser observation and execution (S07, S08) | AT04-AT06, AT10, AT11, AT13, AT22 |
 | FastAPI / Uvicorn | 0.143 / 0.54 | Controller and worker API | API tests, `omca run` smoke |
@@ -16,7 +18,7 @@ Python dependencies are locked in `uv.lock`; the versions below are those the fi
 | python-docx | 1.2.0 | Word report helper (S22) | AT09 |
 | openpyxl | 3.1.5 | Spreadsheet adapter | AT24 |
 | yt-dlp | 2026.8.19 | Accessible media download (S14) | AT16 (HTML5 page with caption track) |
-| FFmpeg / ffprobe | 6.1 in CI; any recent build on Windows | Frames, audio, scene detection (S15) | AT16-AT20 |
+| FFmpeg / ffprobe | 6.1 in CI; any recent build (winget on Windows, Homebrew on macOS) | Frames, audio, scene detection (S15) | AT16-AT20 |
 | faster-whisper | 1.2.1 | Speech recognition (S16) | Code path only; weights must be pre-downloaded |
 | httpx | 0.28.1 | Provider, search and Telegram clients | Mock-transport tests |
 

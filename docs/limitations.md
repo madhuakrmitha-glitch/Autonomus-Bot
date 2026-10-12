@@ -15,6 +15,7 @@ repository; everything else needs the owner-side validation listed in the operat
 | Windows specifics | Browser/office logic on Linux Chromium; Windows paths in config | Edge channel, interactive-session Task Scheduler start, RDP/console behaviour, `desktop.raw_input` via pywinauto |
 | Dedicated endpoints | Reservation, settlement, pause/resume calls against a mock API | Confirm the Hugging Face endpoint management API paths for your account before enabling time billing |
 | SMTP | Send/invite against a local SMTP sink, approval gating, recipient allowlist | A real mail account (only when the owner selects one) |
+| macOS | LaunchAgent generation, macOS configuration defaults, `dotenv:` secrets, key-chord mapping (all platform-neutral logic) | A run on a real Mac: Chrome channel, Keychain prompts, Accessibility permission for raw input, Local Network prompt, `caffeinate` behaviour |
 
 ## Design limitations
 
@@ -45,7 +46,7 @@ repository; everything else needs the owner-side validation listed in the operat
    available. Back up `data/` and `workspace/` (operator guide §12).
 10. **OpenClaw does not see coordinator messages.** Progress, approvals and results are sent through the Bot
     API directly, so they are not in OpenClaw's conversation history; tasks are linked by ID.
-11. **Office adapters are deliberately narrow:** `.xlsx` via openpyxl (no macros, formulas are not
+11. **Office adapters are deliberately narrow (on Windows and macOS alike):** `.xlsx` via openpyxl (no macros, formulas are not
     recalculated), email via SMTP with `.eml` drafts, calendar invitations as `.ics` attachments. No
     Outlook/Graph/IMAP integration.
 12. **PDF companion reports** are not generated (Word is the mandatory format).
