@@ -19,6 +19,7 @@ from ..budget import (
     CallEstimate,
     Usage,
     estimate_image_tokens,
+    estimate_message_tokens,
     estimate_text_tokens,
 )
 from ..config import ApplicationConfig, ModelRoute
@@ -33,7 +34,6 @@ from .types import (
     count_images,
     image_part,
     strip_thinking,
-    text_of,
 )
 
 
@@ -186,7 +186,7 @@ class ModelRouter:
         body, transforms, image_tokens = self.build_body(route, messages, images, tools, tool_choice, max_tokens,
                                                          temperature, response_format)
         n_images = len(count_images(body["messages"]))
-        text_tokens = estimate_text_tokens(text_of(body["messages"])) + (estimate_text_tokens(str(tools)) if tools else 0)
+        text_tokens = estimate_message_tokens(body["messages"]) + (estimate_text_tokens(str(tools)) if tools else 0)
         if n_images and not image_tokens:
             image_tokens = n_images * estimate_image_tokens(route.max_image_side, route.max_image_side,
                                                             route.image_patch_px, route.max_image_side)

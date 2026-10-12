@@ -80,11 +80,24 @@ def controller_for(route: ModelRoute, client: httpx.AsyncClient | None = None) -
 
 async def start_window(ledger: BudgetLedger, route: ModelRoute, hours: float,
                        controller: EndpointController | None = None) -> str:
-    """Reserve the window first; only then resume the endpoint. A failed resume settles at once."""
+    """Reserve the window first; only then resume the endpoint.
+
+    A failed resume may still have started the endpoint, so it is paused before the session is
+    settled. If that pause fails too, the session stays open (and keeps counting against the budget)
+    with its window closed, so the maintenance loop keeps trying to pause it.
+    """
+    ctl = controller or controller_for(route)
     session_id = ledger.reserve_endpoint_session(route, hours)
     try:
-        await (controller or controller_for(route)).resume(route)
-    except Exception:
+        await ctl.resume(route)
+    except Exception as exc:
+        try:
+            await ctl.pause(route)
+        except Exception as pause_exc:  # noqa: BLE001
+            ledger.end_endpoint_window(session_id)
+            raise EndpointControlError(
+                f"resume failed ({exc}) and the endpoint could not be paused ({pause_exc}); pause it manually - "
+                f"OMCA keeps retrying and counts its running time") from exc
         ledger.settle_endpoint_session(session_id, route)
         raise
     return session_id
@@ -92,5 +105,10 @@ async def start_window(ledger: BudgetLedger, route: ModelRoute, hours: float,
 
 async def stop_window(ledger: BudgetLedger, route: ModelRoute, session_id: str,
                       controller: EndpointController | None = None) -> float:
-    await (controller or controller_for(route)).pause(route)
+    """Pause, then settle. A failed pause leaves the session open so its running time keeps counting."""
+    try:
+        await (controller or controller_for(route)).pause(route)
+    except Exception:
+        ledger.end_endpoint_window(session_id)
+        raise
     return ledger.settle_endpoint_session(session_id, route)

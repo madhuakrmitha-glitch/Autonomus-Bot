@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import posixpath
 import re
 from typing import Any
 
@@ -24,6 +25,8 @@ POLICY_CODE_VERSION = "2026-10-12.1"
 
 NEEDS_FRESH_OBSERVATION = {"browser.click", "browser.click_point", "browser.type", "browser.press", "browser.select",
                            "browser.download"}
+
+ARTIFACT_ARGUMENTS = ("artifact_id", "draft_artifact_id", "input_artifact_id")
 
 ALLOW_CATEGORIES = {ActionCategory.READ, ActionCategory.NAVIGATION, ActionCategory.DRAFT, ActionCategory.CREATE_OUTPUT}
 ASK_CATEGORIES = {ActionCategory.CONSEQUENTIAL, ActionCategory.UNKNOWN_MUTATION}
@@ -76,6 +79,10 @@ class PolicyGate:
         except PolicyError as exc:
             return self._decision(PolicyVerdict.DENY, ActionCategory.FORBIDDEN, str(exc), error=exc.code), None
 
+        foreign = self._foreign_artifact(intent, ctx)
+        if foreign:
+            return self._decision(PolicyVerdict.DENY, ActionCategory.FORBIDDEN, foreign, error=ErrorCode.POLICY_DENIED), None
+
         if intent.operation in NEEDS_FRESH_OBSERVATION:
             stale = self._stale(intent, ctx)
             if stale:
@@ -95,6 +102,22 @@ class PolicyGate:
                                   destination=cls.destination, consequence=cls.consequence, rule=rule.id), cls
         return self._decision(PolicyVerdict.REQUIRE_APPROVAL, cls.category, cls.reason, destination=cls.destination,
                               consequence=cls.consequence or cls.reason), cls
+
+    @staticmethod
+    def _foreign_artifact(intent: ActionIntent, ctx: PolicyContext) -> str | None:
+        """Inputs must be this task's own outputs or files the owner attached to it."""
+        if ctx.artifacts is None:
+            return None
+        for key in ARTIFACT_ARGUMENTS:
+            aid = intent.arguments.get(key)
+            if not isinstance(aid, str):
+                continue
+            if aid in (ctx.task_inputs or []):
+                continue
+            manifest = ctx.artifacts(aid)
+            if manifest is None or manifest.task_id != (ctx.task_id or intent.task_id):
+                return f"artifact {aid} does not belong to this task"
+        return None
 
     def _stale(self, intent: ActionIntent, ctx: PolicyContext) -> str | None:
         obs = ctx.observation
@@ -128,7 +151,7 @@ class PolicyGate:
                     continue
             if rule.recipient and (cls.destination or "").lower() != rule.recipient.lower():
                 continue
-            if rule.path_prefix and not (cls.destination or "").startswith(rule.path_prefix):
+            if rule.path_prefix and not _path_within(cls.destination, rule.path_prefix):
                 continue
             if rule.element_name_pattern:
                 name = cls.element.name if cls.element else ""
@@ -145,3 +168,14 @@ class PolicyGate:
                   consequence: str | None = None, rule: str | None = None, error: ErrorCode | None = None) -> PolicyDecision:
         return PolicyDecision(verdict=verdict, category=category, reason=reason, policy_version=self.version,
                               destination=destination, consequence=consequence, standing_rule_id=rule, error_code=error)
+
+
+def _path_within(destination: str | None, prefix: str) -> bool:
+    """``destination`` starts with ``prefix`` after normalisation, so ``a/../b`` cannot escape a rule's folder."""
+    if not destination:
+        return False
+    raw = destination.replace("\\", "/")
+    if raw.startswith("/") or ".." in raw.split("/"):
+        return False
+    want = posixpath.normpath(prefix.replace("\\", "/")) + ("/" if prefix.endswith(("/", "\\")) else "")
+    return posixpath.normpath(raw).startswith(want)

@@ -50,8 +50,10 @@ policy:
       max_uses: 50
 ```
 
-Every rule must name an operation and at least one scope (origin, recipient, path prefix or element
-pattern). Rules never cover `FORBIDDEN` actions. Recurring schedules never grant new permissions.
+Every rule must name an operation and at least one scope: an origin, a recipient or a path prefix. An
+element pattern only narrows a rule further, because page content chooses element names. Path prefixes
+are compared after normalisation, and paths containing `..` never match. Rules never cover `FORBIDDEN`
+actions. Recurring schedules never grant new permissions.
 
 ## Recipients
 

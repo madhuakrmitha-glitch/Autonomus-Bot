@@ -13,12 +13,19 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-from ..budget import BudgetBlocked, CallEstimate, Usage, estimate_image_tokens, estimate_text_tokens
+from ..budget import (
+    BudgetBlocked,
+    CallEstimate,
+    Usage,
+    estimate_image_tokens,
+    estimate_message_tokens,
+    estimate_text_tokens,
+)
 from ..config import ModelRoute
 from .providers import ProviderError
 from .registry import RouteRejected
 from .router import ModelCallError, ModelRouter
-from .types import count_images, text_of
+from .types import count_images
 
 ROLES = ("planning", "vision", "summarisation", "review")
 
@@ -102,7 +109,7 @@ async def stream_chat_completions(router: ModelRouter, body: dict[str, Any], cal
                      route.max_output_tokens)
     n_images = len(count_images(messages))
     est = CallEstimate(
-        input_tokens=estimate_text_tokens(text_of(messages)) + (estimate_text_tokens(json.dumps(body.get("tools"))) if body.get("tools") else 0),
+        input_tokens=estimate_message_tokens(messages) + (estimate_text_tokens(json.dumps(body.get("tools"))) if body.get("tools") else 0),
         images=n_images,
         image_tokens=n_images * estimate_image_tokens(route.max_image_side, route.max_image_side, route.image_patch_px,
                                                       route.max_image_side),

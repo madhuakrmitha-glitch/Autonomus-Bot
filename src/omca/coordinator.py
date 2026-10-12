@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -74,6 +75,8 @@ class Coordinator:
         self.tasks = TaskStore(self.db)
         self.artifacts = ArtifactStore(self.db, config)
         self.ledger = BudgetLedger(self.db, config)
+        self.ledger.on_overrun = self._budget_overrun
+        self._pause_attempts: dict[str, float] = {}
         self.registry = ModelRegistry(self.db, config, self.ledger)
         self.router = ModelRouter(config, self.registry, self.ledger, providers)
         self.policy = PolicyGate(self.db, config)
@@ -176,25 +179,44 @@ class Coordinator:
             if last and (utcnow() - last).total_seconds() >= interval:
                 self.send_progress(t)
 
+    def _budget_overrun(self, call_id: str, route_id: str, reserved: float, actual: float) -> None:
+        cur = self.config.budget.currency
+        self.notifier.text(f"Budget notice: a call on {route_id} cost {actual:.2f} {cur}, more than the {reserved:.2f} "
+                           f"{cur} reserved for it. The ledger records the actual cost; check the route's prices.",
+                           key=f"overrun:{call_id}")
+
     async def enforce_endpoint_windows(self) -> None:
-        """Pause dedicated endpoints whose approved window ended and settle their running time."""
-        from .models.endpoints import EndpointControlError, controller_for
+        """Pause dedicated endpoints whose approved window ended; settle only once a pause succeeded.
+
+        Until then the session stays open, its running cost keeps counting against the budget, the
+        pause is retried on every maintenance tick and the owner is reminded every 15 minutes.
+        """
+        from .models.endpoints import controller_for
 
         for session_id, route_id in self.ledger.overdue_endpoint_sessions():
             route = self.config.models.route(route_id)
             if route is None:
                 continue
+            last = self._pause_attempts.get(session_id, 0.0)
+            if time.monotonic() - last < 60:
+                continue  # at most one pause attempt per minute per session
+            self._pause_attempts[session_id] = time.monotonic()
             try:
                 await controller_for(route).pause(route)
-                paused = True
-            except (EndpointControlError, Exception):  # noqa: BLE001 - still settle and tell the owner
-                paused = False
-            self.ledger.settle_endpoint_session(session_id, route)
-            self.notifier.text(
-                f"Dedicated endpoint {route_id} reached the end of its approved window; "
-                + ("it was paused and its running time settled." if paused else
-                   "pausing FAILED - pause it manually now; running time up to now was settled."),
-                key=f"eps:{session_id}")
+            except Exception as exc:  # noqa: BLE001 - keep the session open and keep trying
+                cost = self.ledger.accrue_endpoint_session(session_id, route)
+                bucket = int(utcnow().timestamp() // 900)
+                self.notifier.text(
+                    f"Dedicated endpoint {route_id} is past its approved window and pausing FAILED ({truncate(str(exc), 120)}). "
+                    f"Pause it manually now. It has cost about {cost:.2f} {self.config.budget.currency} so far and "
+                    "keeps counting against the budget; OMCA retries every minute.",
+                    key=f"eps-fail:{session_id}:{bucket}")
+                continue
+            self._pause_attempts.pop(session_id, None)
+            cost = self.ledger.settle_endpoint_session(session_id, route)
+            self.notifier.text(f"Dedicated endpoint {route_id} reached the end of its approved window; it was paused "
+                               f"and its running time settled ({cost:.2f} {self.config.budget.currency}).",
+                               key=f"eps:{session_id}")
 
     def apply_retention(self) -> dict[str, int]:
         r = self.config.retention
@@ -347,10 +369,26 @@ class Coordinator:
         if intent.operation == "browser.press":
             return f"Press {a['key']}"
         if intent.operation == "email.send":
-            return f"Send the drafted email to {', '.join(a['to'])}"
+            return self._email_preview(a)
         if intent.operation == "file.write":
             return f"Overwrite {a['rel_path']}"
         return f"{intent.operation} {truncate(str(a), 160)}"
+
+    def _email_preview(self, a: dict[str, Any]) -> str:
+        """What the owner approves: recipients, subject and the body as drafted."""
+        from email import policy as email_policy
+        from email.parser import BytesParser
+
+        head = f"Send an email to {', '.join(a['to'])}"
+        try:
+            msg = BytesParser(policy=email_policy.default).parsebytes(self.artifacts.read_bytes(a["draft_artifact_id"]))
+            part = msg.get_body(preferencelist=("plain",))
+            body = part.get_content() if part is not None else ""
+        except Exception:  # noqa: BLE001 - the worker re-checks the draft before sending
+            return f"{head}\n(the draft could not be read for preview)"
+        others = [h for h in ("Cc", "Bcc") if msg.get_all(h)]
+        warning = f"\nWARNING: the draft also has {' and '.join(others)} recipients and will be refused." if others else ""
+        return f"{head}\nSubject: {truncate(str(msg['Subject'] or ''), 200)}{warning}\n\n{truncate(body.strip(), 1500)}"
 
     def _report_path(self, rel_path: str) -> Path:
         base = Path(self.config.storage.owner_reports_dir)

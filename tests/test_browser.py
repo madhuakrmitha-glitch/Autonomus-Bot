@@ -80,8 +80,14 @@ async def test_stale_reference_is_refused(make_system, site, brain):
     from omca.util import new_id, now_iso
     from omca.workers import job_deadline
 
-    lease = s.coord.workers.acquire_lease(t.id, "vm1", "vm1:ui")
-    job = WorkerJob(job_id=new_id("job"), task_id=t.id, action_id=new_id("act"), worker_id="vm1", lease_id=lease.lease_id,
+    # the finished task releases its tab and lease just after turning terminal: replay once that is done
+    for _ in range(100):
+        if s.coord.workers.lease_holder("vm1:ui") is None:
+            break
+        await asyncio.sleep(0.1)
+    replay = f"{t.id}-replay"
+    lease = s.coord.workers.acquire_lease(replay, "vm1", "vm1:ui")
+    job = WorkerJob(job_id=new_id("job"), task_id=replay, action_id=new_id("act"), worker_id="vm1", lease_id=lease.lease_id,
                     resource="vm1:ui", fencing_token=lease.fencing_token, operation="browser.click",
                     arguments={"ref": "e1", "_obs": first_obs}, idempotency_key=new_id("k"), deadline=job_deadline(20),
                     lease_expires_at=lease.expires_at, issued_at=now_iso(), attachment_id="vm1-test")

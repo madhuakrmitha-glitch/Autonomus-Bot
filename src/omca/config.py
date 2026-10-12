@@ -378,8 +378,9 @@ class StandingRule(_Base):
 
     @model_validator(mode="after")
     def _narrow(self) -> StandingRule:
-        if not any([self.origin, self.recipient, self.path_prefix, self.element_name_pattern]):
-            raise ValueError(f"standing rule {self.id} must be narrowly scoped (origin, recipient, path or element)")
+        # page content chooses element names, so a name pattern narrows a rule but never scopes it alone
+        if not any([self.origin, self.recipient, self.path_prefix]):
+            raise ValueError(f"standing rule {self.id} must be scoped to an origin, a recipient or a path")
         return self
 
 

@@ -23,6 +23,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.policy import default as default_policy
+from email.utils import getaddresses
 from typing import Any
 
 from ..config import SmtpConfig
@@ -38,6 +39,9 @@ async def _input(ctx: JobContext, artifact_id: str) -> bytes:
     if artifact_id not in ctx.job.declared_inputs:
         raise JobFailure(ErrorCode.POLICY_DENIED, f"{artifact_id} is not a declared input of this job")
     return await ctx.transport.download_input(ctx.job.job_id, artifact_id)
+
+
+RECIPIENT_HEADERS = ("Cc", "Bcc", "Resent-To", "Resent-Cc", "Resent-Bcc")
 
 
 def _sheet(wb, name: str | None):
@@ -138,7 +142,7 @@ def make_office_handlers(smtp: SmtpConfig | None = None) -> dict[str, Any]:
         art = await ctx.upload("draft", "invite.ics", data, media_type="text/calendar", meta={"sha256": sha256_bytes(data)})
         return HandlerResult(result={"draft_artifact_id": art, "sha256": sha256_bytes(data)}, artifact_ids=[art])
 
-    def _send(msg: EmailMessage) -> dict[str, Any]:
+    def _send(msg: EmailMessage, recipients: list[str]) -> dict[str, Any]:
         if smtp is None:
             raise JobFailure(ErrorCode.UNSUPPORTED_CAPABILITY, "this worker has no SMTP account configured")
         sending = False
@@ -150,7 +154,8 @@ def make_office_handlers(smtp: SmtpConfig | None = None) -> dict[str, Any]:
                 if user and pw:
                     s.login(user, pw)
                 sending = True
-                refused = s.send_message(msg)
+                # the envelope is exactly the approved recipients, whatever the headers say
+                refused = s.send_message(msg, to_addrs=recipients)
         except (smtplib.SMTPRecipientsRefused, smtplib.SMTPSenderRefused) as exc:
             raise JobFailure(ErrorCode.SITE_UNAVAILABLE, f"SMTP refused the message (not sent): {exc}") from exc
         except OSError as exc:  # includes smtplib.SMTPException
@@ -165,11 +170,14 @@ def make_office_handlers(smtp: SmtpConfig | None = None) -> dict[str, Any]:
         a = job.arguments
         data = await _input(ctx, a["draft_artifact_id"])
         msg = BytesParser(policy=default_policy).parsebytes(data)
-        to = [x.strip() for x in str(msg["To"] or "").split(",") if x.strip()]
+        extra = [h for h in RECIPIENT_HEADERS if msg.get_all(h)]
+        if extra:
+            raise JobFailure(ErrorCode.POLICY_DENIED, f"the draft has {', '.join(extra)} recipients; only To is approved")
+        to = [addr for _, addr in getaddresses([str(v) for v in msg.get_all("To") or []]) if addr]
         if sorted(t.lower() for t in to) != sorted(t.lower() for t in a["to"]):
             raise JobFailure(ErrorCode.POLICY_DENIED, "draft recipients differ from the approved recipients")
         del msg["X-OMCA-Draft"]
-        res = await asyncio.to_thread(_send, msg)
+        res = await asyncio.to_thread(_send, msg, list(a["to"]))
         return HandlerResult(result={"sent": True, "to": to, "message_id": str(msg["Message-ID"]), **res,
                                      "draft_sha256": sha256_bytes(data)})
 
@@ -182,7 +190,7 @@ def make_office_handlers(smtp: SmtpConfig | None = None) -> dict[str, Any]:
         msg["Subject"] = "Invitation"
         msg.set_content("You are invited. The calendar invitation is attached.")
         msg.add_attachment(ics, maintype="text", subtype="calendar", filename="invite.ics", params={"method": "REQUEST"})
-        res = await asyncio.to_thread(_send, msg)
+        res = await asyncio.to_thread(_send, msg, list(a["attendees"]))
         return HandlerResult(result={"sent": True, "attendees": a["attendees"], **res})
 
     async def raw_input(job: WorkerJob, ctx: JobContext) -> HandlerResult:

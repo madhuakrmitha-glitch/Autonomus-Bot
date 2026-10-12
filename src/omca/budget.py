@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -52,6 +53,8 @@ class BudgetLedger:
         self.db = db
         self.config = config
         self.bc = config.budget
+        # called with (call_id, route_id, reserved, actual) when a call cost more than it reserved
+        self.on_overrun: Callable[[str, str, float, float], None] | None = None
 
     # -- periods and money ------------------------------------------------------
     def period(self, at: datetime | None = None) -> str:
@@ -115,7 +118,8 @@ class BudgetLedger:
         erow = c.execute(
             """SELECT
                  COALESCE(SUM(CASE WHEN status='SETTLED' THEN cost ELSE 0 END), 0),
-                 COALESCE(SUM(CASE WHEN status IN ('RESERVED','RUNNING') THEN reservation ELSE 0 END), 0),
+                 COALESCE(SUM(CASE WHEN status IN ('RESERVED','RUNNING') THEN MAX(reservation, COALESCE(cost, 0))
+                              ELSE 0 END), 0),
                  COALESCE(SUM(CASE WHEN status='UNKNOWN' THEN reservation ELSE 0 END), 0)
                FROM endpoint_sessions WHERE period=?""",
             (period,),
@@ -209,12 +213,16 @@ class BudgetLedger:
             )
             return None
         cost = self.actual(route, usage, images)
+        reserved = self.db.scalar("SELECT reservation FROM model_calls WHERE id=?", (call_id,)) or 0.0
+        overrun = cost > reserved + 1e-9 and route.billing == "tokens"
         self.db.execute(
             """UPDATE model_calls SET status='SETTLED', input_tokens=?, output_tokens=?, image_tokens=?, cost=?,
-               latency_ms=?, usage_source=?, settled_at=? WHERE id=?""",
+               latency_ms=?, usage_source=?, settled_at=?, error=? WHERE id=?""",
             (usage.input_tokens, usage.output_tokens, usage.image_tokens, cost, latency_ms, usage.source, now_iso(),
-             call_id),
+             f"actual cost {cost:.4f} exceeded the reservation {reserved:.4f}" if overrun else None, call_id),
         )
+        if overrun and self.on_overrun is not None:
+            self.on_overrun(call_id, route.id, reserved, cost)
         return cost
 
     def release(self, call_id: str, error: str) -> None:
@@ -284,6 +292,22 @@ class BudgetLedger:
                         (cost, iso(stopped), session_id))
         return cost
 
+    def accrue_endpoint_session(self, session_id: str, route: ModelRoute) -> float:
+        """Record the running cost so far of a session that could not be stopped (it keeps counting)."""
+        r = self.db.one("SELECT * FROM endpoint_sessions WHERE id=?", (session_id,))
+        if r is None:
+            raise KeyError(session_id)
+        hours = max(0.0, (utcnow() - parse_iso(r["started_at"])).total_seconds() / 3600.0)  # type: ignore[operator]
+        init = route.dedicated.initialization_minutes / 60.0 if route.dedicated else 0.0
+        cost = round((hours + init) * (route.pricing.per_hour or 0) * (self.fx(route.pricing.currency) or 0), 6)
+        self.db.execute("UPDATE endpoint_sessions SET cost=? WHERE id=? AND status='RUNNING'", (cost, session_id))
+        return cost
+
+    def end_endpoint_window(self, session_id: str) -> None:
+        """Close the approved window now, so the maintenance loop keeps trying to pause the endpoint."""
+        self.db.execute("UPDATE endpoint_sessions SET approved_until=? WHERE id=? AND status='RUNNING'",
+                        (now_iso(), session_id))
+
     def overdue_endpoint_sessions(self) -> list[tuple[str, str]]:
         rows = self.db.query("SELECT id, route_id FROM endpoint_sessions WHERE status='RUNNING' AND approved_until <= ?",
                              (now_iso(),))
@@ -338,9 +362,25 @@ class BudgetLedger:
         return [dict(r) for r in rows]
 
 
+MESSAGE_OVERHEAD_TOKENS = 8  # role markers and template tokens per chat message
+
+
 def estimate_text_tokens(text: str) -> int:
-    """Conservative token estimate (about 3 characters per token)."""
-    return math.ceil(len(text) / 3.0) + 4
+    """Conservative token estimate.
+
+    ASCII text averages about 4 characters per token, counted here as 3. Other scripts (Devanagari,
+    CJK, ...) take 2-3 UTF-8 bytes per character and tokenise far less densely, so they are counted by
+    UTF-8 bytes: one token per 2 bytes.
+    """
+    ascii_chars = sum(1 for ch in text if ord(ch) < 128)
+    other_bytes = len(text.encode("utf-8", "replace")) - ascii_chars
+    return math.ceil(ascii_chars / 3.0 + other_bytes / 2.0) + 4
+
+
+def estimate_message_tokens(messages: list[dict]) -> int:
+    from .models.types import text_of
+
+    return sum(estimate_text_tokens(text_of([m])) + MESSAGE_OVERHEAD_TOKENS for m in messages)
 
 
 def estimate_image_tokens(width: int, height: int, patch: int = 28, max_side: int = 1280) -> int:

@@ -369,3 +369,247 @@ def test_same_page_links_and_cookie_image_fetches_stay_possible_mutations(tmp_pa
     assert category("web.fetch_image", bad) == C.READ                 # no cookies: cannot act for the owner
     assert category("browser.fetch_image", bad) == C.UNKNOWN_MUTATION  # session cookies: may act for the owner
     assert category("browser.fetch_image", {"src": "https://shop.example/img/a.png"}) == C.READ
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Email: only the approved recipients, only this task's draft, and the owner sees what is sent
+# ---------------------------------------------------------------------------------------------------------
+
+
+def _draft(**headers) -> bytes:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    for k, v in {"To": "asha@example.com", "From": "owner@example.com", "Subject": "Weekly numbers", **headers}.items():
+        msg[k] = v
+    msg.set_content("Hi Asha, the numbers are attached.")
+    return bytes(msg)
+
+
+class _Transport:
+    def __init__(self, data: bytes):
+        self.data = data
+
+    async def download_input(self, job_id, artifact_id):
+        return self.data
+
+
+@pytest.mark.parametrize("extra", [{"Cc": "eve@example.com"}, {"Bcc": "eve@example.com"},
+                                   {"Resent-To": "eve@example.com"}])
+async def test_email_send_refuses_unapproved_header_recipients(smtp_sink, tmp_path, extra):
+    from omca.config import SmtpConfig
+    from omca.contracts import WorkerJob
+    from omca.worker.agent import JobContext, JobFailure
+    from omca.worker.office import make_office_handlers
+
+    send = make_office_handlers(SmtpConfig(host="127.0.0.1", port=smtp_sink.port, starttls=False,
+                                           from_address="owner@example.com"))["email.send"]
+
+    def job(data):
+        j = WorkerJob(job_id="job_1", task_id="tsk_1", action_id="act_1", worker_id="vm1", lease_id="l", resource="r",
+                      fencing_token=1, operation="email.send", arguments={"draft_artifact_id": "art_d", "to": ["asha@example.com"]},
+                      idempotency_key="k", deadline=now_iso(), lease_expires_at=now_iso(), issued_at=now_iso(),
+                      declared_inputs=["art_d"])
+        return j, JobContext(j, _Transport(data), tmp_path, {})
+
+    with pytest.raises(JobFailure) as e:
+        await send(*job(_draft(**extra)))
+    assert e.value.code.value == "POLICY_DENIED" and smtp_sink.messages == []
+    await send(*job(_draft()))
+    assert [m["to"] for m in smtp_sink.messages] == [["asha@example.com"]]  # the envelope is the approved list
+
+
+def test_email_inputs_must_belong_to_the_task_and_the_preview_shows_the_message(tmp_path):
+    from omca.config import config_from_dict
+    from omca.contracts import ActionIntent
+    from omca.policy.operations import PolicyContext
+
+    from .conftest import base_config
+
+    c = Coordinator(config_from_dict(base_config(tmp_path, policy={"contacts": [
+        {"name": "Asha", "kind": "email", "address": "asha@example.com"}]})))
+    mine = c.artifacts.put("tsk_mine", "output", "draft.eml", _draft()).manifest.artifact_id
+    theirs = c.artifacts.put("tsk_other", "output", "draft.eml", _draft()).manifest.artifact_id
+    attached = c.artifacts.put(None, "input", "draft.eml", _draft()).manifest.artifact_id
+
+    def verdict(aid, inputs=()):
+        intent = ActionIntent(action_id="a", task_id="tsk_mine", operation="email.send", idempotency_key="k",
+                              arguments={"draft_artifact_id": aid, "to": ["asha@example.com"]})
+        ctx = PolicyContext(c.config, None, task_id="tsk_mine", artifacts=c.artifacts.get, task_inputs=list(inputs))
+        return c.policy.evaluate(intent, ctx)[0]
+
+    assert verdict(mine).verdict.value == "REQUIRE_APPROVAL"
+    denied = verdict(theirs)
+    assert denied.verdict.value == "DENY" and "does not belong" in denied.reason
+    assert verdict("art_missing").verdict.value == "DENY"
+    assert verdict(attached, inputs=[attached]).verdict.value == "REQUIRE_APPROVAL"  # the owner attached it
+
+    preview = c._email_preview({"draft_artifact_id": mine, "to": ["asha@example.com"]})
+    assert "Subject: Weekly numbers" in preview and "the numbers are attached" in preview
+    cc = c.artifacts.put("tsk_mine", "output", "cc.eml", _draft(Cc="eve@example.com")).manifest.artifact_id
+    assert "WARNING" in c._email_preview({"draft_artifact_id": cc, "to": ["asha@example.com"]})
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Budget
+# ---------------------------------------------------------------------------------------------------------
+
+
+def test_token_estimate_covers_non_latin_text_and_message_overhead():
+    from omca.budget import MESSAGE_OVERHEAD_TOKENS, estimate_message_tokens, estimate_text_tokens
+
+    hindi = "भारत में छत पर सौर ऊर्जा " * 50          # about 1 token per 1-2 characters in practice
+    chinese = "屋顶太阳能在印度的普及情况" * 50
+    assert estimate_text_tokens(hindi) >= len(hindi)
+    assert estimate_text_tokens(chinese) >= 1.5 * len(chinese)
+    english = "Rooftop solar adoption in India " * 50
+    assert len(english) / 4 < estimate_text_tokens(english) <= len(english) / 3 + 5
+    msgs = [{"role": "user", "content": "hi"}] * 10
+    assert estimate_message_tokens(msgs) == 10 * (estimate_text_tokens("hi") + MESSAGE_OVERHEAD_TOKENS)
+
+
+def test_a_call_costing_more_than_its_reservation_is_flagged(tmp_path):
+    from omca.budget import BudgetLedger, CallEstimate, Usage
+    from omca.config import config_from_dict
+    from omca.db import Database
+
+    from .conftest import base_config
+
+    route = {"id": "h", "provider": "openai_compatible", "base_url": "https://api.example/v1",
+             "model": "Qwen/Qwen3.5-35B-A3B", "license": "apache-2.0", "open_weights": True, "enabled": True,
+             "billing": "tokens", "pricing": {"currency": "USD", "input_per_million": 1.0, "output_per_million": 1.0,
+                                              "source": "price page", "effective_date": "2026-10-01"}}
+    cfg = config_from_dict(base_config(tmp_path, None, budget={"fx": {"USD": {"rate": 90, "source": "rbi",
+                                                                              "effective_date": "2026-10-01"}}},
+                                       models={"roles": {}, "routes": [route]}))
+    ledger = BudgetLedger(Database(cfg.storage.database_path), cfg)
+    seen = []
+    ledger.on_overrun = lambda *a: seen.append(a)
+    r = cfg.models.routes[0]
+    cid = ledger.reserve(r, CallEstimate(100, max_output_tokens=100), task_id=None, purpose="x", caller="t")
+    cost = ledger.settle(cid, r, Usage(input_tokens=100_000, output_tokens=50_000, source="provider"), images=0,
+                         latency_ms=1)
+    assert seen and seen[0][0] == cid and seen[0][3] == cost
+    assert "exceeded the reservation" in ledger.db.scalar("SELECT error FROM model_calls WHERE id=?", (cid,))
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Dedicated endpoints: a session that might still be running is never settled
+# ---------------------------------------------------------------------------------------------------------
+
+
+def _endpoint_cfg(tmp_path):
+    import os
+
+    from omca.config import config_from_dict
+
+    from .conftest import base_config
+
+    os.environ["OMCA_T_HF"] = "hf-token"
+    route = {"id": "ded", "provider": "hf_dedicated_endpoint", "base_url": "https://e.example/v1", "model": "tgi",
+             "license": "apache-2.0", "open_weights": True, "enabled": True, "billing": "time",
+             "pricing": {"currency": "USD", "per_hour": 1.0, "source": "price page", "effective_date": "2026-10-01"},
+             "dedicated": {"controller": "huggingface", "namespace": "me", "name": "qwen", "api_token_ref": "env:OMCA_T_HF"}}
+    return config_from_dict(base_config(tmp_path, None, budget={"fx": {"USD": {"rate": 90, "source": "rbi",
+                                                                               "effective_date": "2026-10-01"}}},
+                                        models={"allow_fixture_routes": True, "require_probes": False, "roles": {},
+                                                "routes": [route]}))
+
+
+class _Ctl:
+    def __init__(self, resume_ok=True, pause_ok=True):
+        self.resume_ok, self.pause_ok, self.calls = resume_ok, pause_ok, []
+
+    async def resume(self, route):
+        self.calls.append("resume")
+        if not self.resume_ok:
+            raise RuntimeError("resume failed")
+
+    async def pause(self, route):
+        self.calls.append("pause")
+        if not self.pause_ok:
+            raise RuntimeError("pause failed")
+
+
+async def test_failed_resume_or_pause_keeps_the_session_counting(tmp_path):
+    from omca.budget import BudgetLedger
+    from omca.db import Database
+    from omca.models.endpoints import EndpointControlError, start_window, stop_window
+
+    cfg = _endpoint_cfg(tmp_path)
+    ledger = BudgetLedger(Database(cfg.storage.database_path), cfg)
+    r = cfg.models.routes[0]
+
+    def status(sid):
+        return ledger.db.scalar("SELECT status FROM endpoint_sessions WHERE id=?", (sid,))
+
+    ctl = _Ctl(resume_ok=False)  # resume failed but the pause works: nothing keeps running
+    with pytest.raises(RuntimeError):
+        await start_window(ledger, r, 0.5, ctl)
+    assert ctl.calls == ["resume", "pause"]
+    assert ledger.db.scalar("SELECT COUNT(*) FROM endpoint_sessions WHERE status='SETTLED'") == 1
+
+    with pytest.raises(EndpointControlError):  # neither works: the endpoint may be running
+        await start_window(ledger, r, 0.5, _Ctl(resume_ok=False, pause_ok=False))
+    sid = ledger.db.scalar("SELECT id FROM endpoint_sessions WHERE status='RUNNING'")
+    assert sid and ledger.overdue_endpoint_sessions() == [(sid, "ded")]  # maintenance retries the pause
+
+    sid2 = await start_window(ledger, r, 0.5, _Ctl())
+    with pytest.raises(RuntimeError):
+        await stop_window(ledger, r, sid2, _Ctl(pause_ok=False))
+    assert status(sid2) == "RUNNING" and (sid2, "ded") in ledger.overdue_endpoint_sessions()
+
+
+async def test_maintenance_retries_the_pause_and_settles_only_after_it_works(tmp_path, monkeypatch):
+    from omca.channels import RecordingChannel
+    from omca.models import endpoints
+
+    cfg = _endpoint_cfg(tmp_path)
+    c = Coordinator(cfg, channel=RecordingChannel())
+    r = cfg.models.routes[0]
+    sid = await endpoints.start_window(c.ledger, r, 0.5, _Ctl())
+    c.ledger.end_endpoint_window(sid)
+    c.db.execute("UPDATE endpoint_sessions SET started_at=?, reservation=0.01 WHERE id=?",
+                 ("2026-10-12T00:00:00.000Z", sid))
+    failing = _Ctl(pause_ok=False)
+    monkeypatch.setattr(endpoints, "controller_for", lambda route: failing)
+    await c.enforce_endpoint_windows()
+    row = c.db.one("SELECT status, cost, reservation FROM endpoint_sessions WHERE id=?", (sid,))
+    assert row["status"] == "RUNNING" and row["cost"] > row["reservation"]
+    with c.db.tx() as tx:  # the accrued running cost, not the stale reservation, counts against the budget
+        assert c.ledger._period_spend(tx, c.ledger.period())[1] == pytest.approx(row["cost"])
+    await c.enforce_endpoint_windows()
+    assert failing.calls == ["pause"]  # at most one attempt per minute
+    c._pause_attempts.clear()
+    monkeypatch.setattr(endpoints, "controller_for", lambda route: _Ctl())
+    await c.enforce_endpoint_windows()
+    assert c.db.scalar("SELECT status FROM endpoint_sessions WHERE id=?", (sid,)) == "SETTLED"
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Standing rules
+# ---------------------------------------------------------------------------------------------------------
+
+
+def test_standing_rule_paths_cannot_escape_and_names_alone_do_not_scope(tmp_path):
+    from omca.config import config_from_dict
+    from omca.contracts import ActionIntent
+    from omca.policy.operations import PolicyContext
+
+    from .conftest import base_config
+
+    rule = {"id": "drafts", "description": "overwrite drafts", "operation": "file.write", "path_prefix": "drafts/"}
+    c = Coordinator(config_from_dict(base_config(tmp_path, policy={"standing_rules": [rule]})))
+    art = c.artifacts.put("tsk_1", "output", "r.txt", b"report").manifest.artifact_id
+
+    def verdict(path):
+        intent = ActionIntent(action_id="a", task_id="tsk_1", operation="file.write", idempotency_key="k",
+                              arguments={"artifact_id": art, "rel_path": path, "overwrite": True})
+        return c.policy.evaluate(intent, PolicyContext(c.config, None, task_id="tsk_1", artifacts=c.artifacts.get))[0]
+
+    assert verdict("drafts/weekly.docx").verdict.value == "ALLOW"
+    for path in ("drafts/../final/weekly.docx", "drafts/..\\final.docx", "draftsX/weekly.docx", "/drafts/x.docx"):
+        assert verdict(path).verdict.value == "REQUIRE_APPROVAL", path
+    with pytest.raises(ValueError):
+        config_from_dict({"policy": {"standing_rules": [{"id": "x", "description": "d", "operation": "browser.click",
+                                                         "element_name_pattern": "Accept cookies"}]}})
