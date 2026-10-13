@@ -93,7 +93,8 @@ class UiCallback(BaseModel):
 UI_IDENTITY = Identity("owner_api", "web-ui")
 UI_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 UI_ASSETS = {"app.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8"}
-UI_TASK_REF = re.compile(r"^/(?:omca\s+)?(?:steer|answer|status|pause|resume|cancel)\s+(\S+)", re.I)
+UI_CONVERSATION_ID = re.compile(r"cnv_[A-Za-z0-9]{6,40}")
+UI_TASK_REF =re.compile(r"^/(?:omca\s+)?(?:steer|answer|status|pause|resume|cancel)\s+(\S+)", re.I)
 
 
 def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
@@ -343,9 +344,13 @@ def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
                     "currency": cfg.budget.currency}
 
         @app.post("/ui/api/messages", tags=["ui"], summary="Send an owner message or command from the web UI")
-        async def ui_send(text: str = Form(default=""), files: list[UploadFile] = File(default=[]),
+        async def ui_send(text: str = Form(default=""), conversation_id: str | None = Form(default=None),
+                          files: list[UploadFile] = File(default=[]),
                           ident: Identity = Depends(owner)) -> dict[str, Any]:
             from .util import new_id
+
+            if conversation_id is not None and not UI_CONVERSATION_ID.fullmatch(conversation_id):
+                raise HTTPException(400, "invalid conversation id")
 
             attachments = []
             for f in files[:10]:
@@ -356,10 +361,12 @@ def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
             if not text.strip() and not attachments:
                 raise HTTPException(400, "empty message")
             names = ", ".join(n for n, _ in attachments)
-            mid = inbox.add("owner", text.strip() + (f"\n[attached: {names}]" if names else ""))
+            mid = inbox.add("owner", text.strip() + (f"\n[attached: {names}]" if names else ""),
+                            conversation_id=conversation_id)
             newest = coord.tasks.list(limit=1)
             before = newest[0].id if newest else None
-            reply = await iface.handle_message(UI_IDENTITY, text, update_id=new_id("web"), attachments=attachments)
+            reply = await iface.handle_message(UI_IDENTITY, text, update_id=new_id("web"), attachments=attachments,
+                                            conversation_id=conversation_id)
             # thread the message: the task it created, or the task a command addressed
             task_id = None
             created = coord.tasks.list(limit=1)
@@ -370,9 +377,9 @@ def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
             if task_id:
                 inbox.link_task(mid, task_id)
             if reply:
-                inbox.add("assistant", reply, task_id=task_id)
+                inbox.add("assistant", reply, task_id=task_id, conversation_id=conversation_id)
             await coord.notifier.flush()
-            return {"reply": reply, "task_id": task_id}
+            return {"reply": reply, "task_id": task_id, "conversation_id": conversation_id}
 
         @app.post("/ui/api/callback", tags=["ui"], summary="Press an inline button (approvals) from the web UI")
         async def ui_callback(body: UiCallback, ident: Identity = Depends(owner)) -> dict[str, Any]:

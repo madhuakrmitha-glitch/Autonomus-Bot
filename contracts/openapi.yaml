@@ -1705,6 +1705,15 @@ components:
           type: object
           title: Params
           description: Workflow parameters (e.g. video url, question)
+        conversation_id:
+          anyOf:
+          - type: string
+            maxLength: 64
+            pattern: ^cnv_[A-Za-z0-9]+$
+          - type: 'null'
+          title: Conversation Id
+          description: Chat this task belongs to; chat replies only see their own
+            conversation
       additionalProperties: false
       type: object
       required:
@@ -1732,6 +1741,11 @@ components:
         task_id:
           type: string
           title: Task Id
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
         status:
           $ref: '#/components/schemas/TaskStatus'
         workflow:

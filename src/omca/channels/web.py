@@ -23,25 +23,30 @@ class WebInbox:
         return int(self.db.scalar("SELECT COALESCE(MAX(rev), 0) + 1 FROM web_messages"))
 
     def add(self, role: str, text: str, *, kind: str = "text", task_id: str | None = None,
-            buttons: Any = None, filename: str | None = None, outbox_id: str | None = None) -> int:
+            buttons: Any = None, filename: str | None = None, outbox_id: str | None = None,
+            conversation_id: str | None = None) -> int:
         with self.db.tx():
             if outbox_id is not None:
                 existing = self.db.scalar("SELECT id FROM web_messages WHERE outbox_id=?", (outbox_id,))
                 if existing is not None:
                     return int(existing)
             now = now_iso()
+            if conversation_id is None and task_id is not None:
+                conversation_id = self.db.scalar("SELECT conversation_id FROM tasks WHERE id=?", (task_id,))
             cur = self.db.execute(
-                "INSERT INTO web_messages(outbox_id, task_id, role, kind, text, buttons_json, filename, rev, created_at, "
-                "updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (outbox_id, task_id, role, kind, text, dumps(buttons) if buttons else None, filename, self._next_rev(),
-                 now, now),
+                "INSERT INTO web_messages(outbox_id, task_id, conversation_id, role, kind, text, buttons_json, filename, "
+                "rev, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (outbox_id, task_id, conversation_id, role, kind, text, dumps(buttons) if buttons else None, filename,
+                 self._next_rev(), now, now),
             )
             return int(cur.lastrowid)
 
     def link_task(self, message_id: int, task_id: str) -> None:
         """Thread an owner message under the task it created or addressed."""
-        self.db.execute("UPDATE web_messages SET task_id=?, rev=?, updated_at=? WHERE id=? AND task_id IS NULL",
-                        (task_id, self._next_rev(), now_iso(), message_id))
+        self.db.execute("UPDATE web_messages SET task_id=?, "
+                        "conversation_id=COALESCE(conversation_id, (SELECT conversation_id FROM tasks WHERE id=?)), "
+                        "rev=?, updated_at=? WHERE id=? AND task_id IS NULL",
+                        (task_id, task_id, self._next_rev(), now_iso(), message_id))
 
     def _target(self, ref: str) -> int | None:
         """Web message an edit refers to: an outbox id, or a channel message id recorded in an outbox result."""
@@ -79,7 +84,7 @@ class WebInbox:
         rows = self.db.query("SELECT * FROM web_messages WHERE rev > ? ORDER BY rev LIMIT ?", (after, limit))
         return [{
             "id": r["id"], "rev": r["rev"], "role": r["role"], "kind": r["kind"], "text": r["text"],
-            "task_id": r["task_id"], "buttons": loads(r["buttons_json"], None), "filename": r["filename"],
+            "task_id": r["task_id"], "conversation_id": r["conversation_id"], "buttons": loads(r["buttons_json"], None), "filename": r["filename"],
             "created_at": r["created_at"], "updated_at": r["updated_at"],
         } for r in rows]
 

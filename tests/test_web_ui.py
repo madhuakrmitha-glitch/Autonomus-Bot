@@ -165,3 +165,31 @@ async def test_long_poll_returns_as_soon_as_a_message_arrives(web):
         await bg
         assert [m["text"] for m in r.json()["messages"]] == ["ping"]
         assert loop.time() - started < 3
+
+
+def test_each_chat_keeps_its_own_messages_and_tasks(web):
+    coord, client = web
+    a, b = "cnv_aaaaaaaaaaaa", "cnv_bbbbbbbbbbbb"
+    ra = client.post("/ui/api/messages", data={"text": "hello from chat a", "conversation_id": a}, headers=OWNER).json()
+    rb = client.post("/ui/api/messages", data={"text": "/budget", "conversation_id": b}, headers=OWNER).json()
+    assert ra["conversation_id"] == a and rb["task_id"] is None
+    [task] = coord.tasks.list()
+    assert task.conversation_id == a and task.request.conversation_id == a
+    assert client.get(f"/ui/api/tasks/{task.id[-6:]}", headers=OWNER).json()["conversation_id"] == a
+    feed = client.get("/ui/api/messages", headers=OWNER).json()["messages"]
+    by_chat = {c: [m["text"] for m in feed if m["conversation_id"] == c and m["role"] == "owner"] for c in (a, b)}
+    assert "hello from chat a" in by_chat[a] and "/budget" in by_chat[b] and "hello from chat a" not in by_chat[b]
+    assert all(m["conversation_id"] == a for m in feed if m["task_id"] == task.id)  # the ack inherits the task's chat
+    assert client.post("/ui/api/messages", data={"text": "hi", "conversation_id": "../x"}, headers=OWNER).status_code == 400
+
+
+def test_chat_workflow_only_sees_its_own_conversation(web):
+    from omca.workflows.chat import _turns
+
+    coord, client = web
+    for chat, text in (("cnv_aaaaaaaaaaaa", "first in a"), ("cnv_bbbbbbbbbbbb", "only in b"), ("cnv_aaaaaaaaaaaa", "second in a")):
+        client.post("/ui/api/messages", data={"text": text, "conversation_id": chat}, headers=OWNER)
+    newest = coord.tasks.list(limit=1)[0]
+    assert newest.goal == "second in a"
+    turns = _turns(coord, newest)
+    assert [t["content"] for t in turns] == ["first in a"]  # queued tasks have no answer yet; chat b is never mixed in

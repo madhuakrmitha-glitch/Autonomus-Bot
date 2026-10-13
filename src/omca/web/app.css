@@ -391,3 +391,5 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
   .jump { bottom: 130px; }
   .approval dl { grid-template-columns: 1fr; gap: 0; } .approval dt { margin-top: 6px; }
 }
+.task-item.unread .goal { font-weight: 700; }
+.task-item.unread .when::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; }

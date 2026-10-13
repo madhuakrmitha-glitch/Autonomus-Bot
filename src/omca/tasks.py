@@ -63,6 +63,7 @@ class TaskRecord:
     created_at: str
     updated_at: str
     finished_at: str | None
+    conversation_id: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -96,6 +97,7 @@ def _row(r: Any) -> TaskRecord:
         created_at=r["created_at"],
         updated_at=r["updated_at"],
         finished_at=r["finished_at"],
+        conversation_id=r["conversation_id"],
     )
 
 
@@ -124,9 +126,9 @@ class TaskStore:
                     return self.get(existing["id"])  # type: ignore[return-value]
             c.execute(
                 """INSERT INTO tasks(id, owner, goal, workflow, request_json, status, limits_json, origin, dedup_key,
-                   schedule_run_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   schedule_run_id, conversation_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (task_id, owner, request.goal, workflow, request.model_dump_json(), S.QUEUED.value, dumps(limits),
-                 origin, dedup_key, schedule_run_id, now, now),
+                 origin, dedup_key, schedule_run_id, request.conversation_id, now, now),
             )
             self.event(task_id, "created", {"workflow": workflow, "origin": origin, "goal": request.goal})
         return self.get(task_id)  # type: ignore[return-value]
@@ -142,8 +144,12 @@ class TaskStore:
             raise KeyError(f"unknown task {task_id}")
         return t
 
-    def list(self, statuses: list[TaskStatus] | None = None, limit: int = 50) -> list[TaskRecord]:
-        if statuses:
+    def list(self, statuses: list[TaskStatus] | None = None, limit: int = 50,
+             conversation_id: str | None = None) -> list[TaskRecord]:
+        if conversation_id:
+            rows = self.db.query("SELECT * FROM tasks WHERE conversation_id=? ORDER BY created_at DESC LIMIT ?",
+                                 (conversation_id, limit))
+        elif statuses:
             q = ",".join("?" for _ in statuses)
             rows = self.db.query(
                 f"SELECT * FROM tasks WHERE status IN ({q}) ORDER BY created_at DESC LIMIT ?",
@@ -280,6 +286,7 @@ class TaskStore:
         )
         return TaskView(
             task_id=task.id,
+            conversation_id=task.conversation_id,
             status=task.status,
             workflow=task.workflow,
             goal=task.goal,

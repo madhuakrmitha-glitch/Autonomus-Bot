@@ -56,7 +56,8 @@ class OwnerInterface:
 
     async def handle_message(self, identity: Identity, text: str, *, update_id: str | None = None,
                              reply_to_message_id: str | None = None,
-                             attachments: list[tuple[str, bytes]] | None = None) -> str | None:
+                             attachments: list[tuple[str, bytes]] | None = None,
+                             conversation_id: str | None = None) -> str | None:
         text = (text or "").strip()
         if text.startswith("/pair"):
             return self._pair(identity, text)
@@ -70,7 +71,7 @@ class OwnerInterface:
         if not text and not attachments:
             return None
         if text.startswith("/"):
-            return await self._command(identity, text, attachments or [])
+            return await self._command(identity, text, attachments or [], conversation_id)
         if reply_to_message_id:
             tid = self._task_for_message(reply_to_message_id)
             t = self.c.tasks.get(tid) if tid else None
@@ -80,7 +81,7 @@ class OwnerInterface:
                     return f"Answer passed to task {t.id[-6:]}."
                 self.c.steer_task(t.id, text)
                 return None
-        return self._new_task(text, "auto", attachments or [])
+        return self._new_task(text, "auto", attachments or [], conversation_id=conversation_id)
 
     async def handle_callback(self, identity: Identity, data: str, *, callback_id: str | None = None) -> str:
         if self.seen(f"{identity.channel}:cb", callback_id, identity.user_id, self.c.is_owner(identity)):
@@ -106,8 +107,10 @@ class OwnerInterface:
             t = active[0] if len(active) == 1 else None
         return t
 
-    def _new_task(self, goal: str, workflow: str, attachments: list[tuple[str, bytes]], params: dict | None = None) -> str:
+    def _new_task(self, goal: str, workflow: str, attachments: list[tuple[str, bytes]], params: dict | None = None,
+                  conversation_id: str | None = None) -> str:
         req = TaskRequest(goal=goal[:8000], workflow=workflow, params=params or {},  # type: ignore[arg-type]
+                          conversation_id=conversation_id,
                           sources=[u.rstrip(").,") for u in URL.findall(goal)][:10])
         task = self.c.submit_task(req)
         if attachments:
@@ -143,7 +146,8 @@ class OwnerInterface:
         self.c.db.kv_set("pairing", {"code": code, "expires_at": iso(utcnow() + timedelta(seconds=ttl))})
         return code
 
-    async def _command(self, identity: Identity, text: str, attachments: list[tuple[str, bytes]]) -> str | None:
+    async def _command(self, identity: Identity, text: str, attachments: list[tuple[str, bytes]],
+                       conversation_id: str | None = None) -> str | None:
         cmd, _, rest = text.partition(" ")
         cmd = cmd.split("@", 1)[0].lower()
         rest = rest.strip()
@@ -156,18 +160,18 @@ class OwnerInterface:
         if cmd in ("/start", "/help"):
             return HELP
         if cmd == "/research":
-            return self._new_task(rest, "research_report", attachments) if rest else "Usage: /research <topic>"
+            return self._new_task(rest, "research_report", attachments, conversation_id=conversation_id) if rest else "Usage: /research <topic>"
         if cmd == "/video":
             m = URL.search(rest)
             question = URL.sub("", rest).strip() or "Summarise what happens in the video with timestamps."
             params = {"url": m.group(0)} if m else {}
             if m:
                 params["question"] = question
-            return self._new_task(rest or "Analyse a video", "video_analysis", attachments, params)
+            return self._new_task(rest or "Analyse a video", "video_analysis", attachments, params, conversation_id)
         if cmd == "/browse":
-            return self._new_task(rest, "browser_task", attachments) if rest else "Usage: /browse <goal>"
+            return self._new_task(rest, "browser_task", attachments, conversation_id=conversation_id) if rest else "Usage: /browse <goal>"
         if cmd == "/office":
-            return self._new_task(rest, "desktop_workflow", attachments) if rest else "Usage: /office <goal>"
+            return self._new_task(rest, "desktop_workflow", attachments, conversation_id=conversation_id) if rest else "Usage: /office <goal>"
         if cmd == "/tasks":
             items = c.tasks.list(limit=10)
             return "\n".join(f"{t.id[-6:]} {t.status.value.lower():<17} {truncate(t.goal, 60)}" for t in items) or "No tasks yet."

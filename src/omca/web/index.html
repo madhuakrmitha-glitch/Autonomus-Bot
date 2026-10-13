@@ -10,18 +10,18 @@
 </head>
 <body>
 <div class="app" id="app">
-  <aside class="sidebar" id="sidebar" aria-label="Tasks">
+  <aside class="sidebar" id="sidebar" aria-label="Chats">
     <div class="brand">
       <div class="logo" aria-hidden="true"></div>
       <div class="brand-text"><strong>OMCA</strong><span>Assistant</span></div>
-      <button class="icon-btn only-mobile" data-action="close-sidebar" aria-label="Close tasks" data-icon="x"></button>
+      <button class="icon-btn only-mobile" data-action="close-sidebar" aria-label="Close chats" data-icon="x"></button>
     </div>
-    <button class="new-task" data-action="new-task"><span data-icon="plus"></span>New task<kbd class="kbd-hint">N</kbd></button>
+    <button class="new-task" data-action="new-task"><span data-icon="plus"></span>New chat<kbd class="kbd-hint">N</kbd></button>
     <label class="search">
       <span data-icon="search"></span>
-      <input id="taskSearch" type="search" placeholder="Search tasks" autocomplete="off" aria-label="Search tasks">
+      <input id="taskSearch" type="search" placeholder="Search chats" autocomplete="off" aria-label="Search chats">
     </label>
-    <div class="segmented" id="taskFilter" role="tablist" aria-label="Filter tasks">
+    <div class="segmented" id="taskFilter" role="tablist" aria-label="Filter chats">
       <button role="tab" data-filter="all" aria-selected="true">All</button>
       <button role="tab" data-filter="active">Active</button>
       <button role="tab" data-filter="done">Done</button>
@@ -44,10 +44,10 @@
 
   <main class="main">
     <header class="topbar">
-      <button class="icon-btn only-mobile" data-action="open-sidebar" aria-label="Show tasks" data-icon="menu"></button>
+      <button class="icon-btn only-mobile" data-action="open-sidebar" aria-label="Show chats" data-icon="menu"></button>
       <div class="topbar-title" id="topTitle">
-        <h1>Activity</h1>
-        <span class="sub">Everything the assistant is doing</span>
+        <h1>New chat</h1>
+        <span class="sub">A fresh conversation with its own context</span>
       </div>
       <div class="topbar-actions">
         <span class="conn" id="conn" title="Connection"><i></i><span>Connecting</span></span>
@@ -83,7 +83,7 @@
 
 <div class="overlay" id="palette" hidden>
   <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
-    <label class="palette-search"><span data-icon="search"></span><input id="paletteInput" placeholder="Search tasks and commands…" autocomplete="off"></label>
+    <label class="palette-search"><span data-icon="search"></span><input id="paletteInput" placeholder="Search chats and commands…" autocomplete="off"></label>
     <div class="palette-list" id="paletteList" role="listbox"></div>
     <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> select</span><span><kbd>Esc</kbd> close</span></div>
   </div>

@@ -42,6 +42,7 @@
     alert: ["M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z", "M12 9v4M12 17h.01"],
     calendar: [{ r: [3, 4, 18, 18, 2] }, "M16 2v4M8 2v4M3 10h18"],
     help: [{ c: [12, 12, 10] }, "M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"],
+    "message-square": ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
   };
   const SVGNS = "http://www.w3.org/2000/svg";
   function icon(name) {
@@ -174,9 +175,15 @@
   ];
 
   // ---------------------------------------------------------------------------------------- state
-  const TOKEN_KEY = "omca.ownerToken";
+  const TOKEN_KEY = "omca.ownerToken", CONV_KEY = "omca.conversation";
+  // A chat is a conversation: its messages and tasks share a conversation id, and the assistant only sees that chat's history.
+  // Tasks without one (older rows, Telegram) are their own one-task chat, keyed by task id.
+  const newConvId = () => "cnv_" + Array.from(crypto.getRandomValues(new Uint8Array(14)), (b) => (b % 36).toString(36)).join("");
+  const convOfTask = (t) => t.conversation_id || t.task_id;
+  const convOfMsg = (m) => m.conversation_id || m.task_id || null;
   const S = {
     token: null, rev: 0, messages: new Map(), els: new Map(), tasks: [], taskMap: new Map(), selected: null,
+    conv: store.get(CONV_KEY) || newConvId(), unreadConv: new Set(),
     detail: null, filter: "all", query: "", mode: 0, files: [], replyTo: null, info: null, budget: null,
     approvals: new Map(), blobs: new Map(), unread: 0, notify: store.get("omca.notify") === "1",
     inspectorOpen: store.get("omca.inspector") !== "0", connected: false, firstLoad: true, sending: false,
@@ -377,9 +384,27 @@
   }
 
   function visibleMessages() {
-    const all = [...S.messages.values()].sort((a, b) => a.id - b.id);
-    return S.selected ? all.filter((m) => m.task_id === S.selected) : all;
+    return [...S.messages.values()].filter((m) => convOfMsg(m) === S.conv).sort((a, b) => a.id - b.id);
   }
+
+  // ---------------------------------------------------------------------------------------- conversations
+  const NEEDS_YOU = new Set(["AWAITING_APPROVAL", "AWAITING_USER", "BLOCKED"]);
+  const convTasks = (key = S.conv) => S.tasks.filter((t) => convOfTask(t) === key);
+  function conversations() {
+    const groups = new Map();  // S.tasks is newest first, so the map is too
+    for (const t of S.tasks) { const k = convOfTask(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
+    return [...groups].map(([key, tasks]) => {
+      const first = tasks[tasks.length - 1], latest = tasks[0];
+      const work = tasks.find((t) => t.workflow !== "chat_workflow");
+      const lead = tasks.find((t) => NEEDS_YOU.has(t.status)) || tasks.find((t) => WORKING.has(t.status)) || latest;
+      return {
+        key, tasks, title: first.goal, latest, work, status: lead.status, workflow: (work || latest).workflow,
+        updated_at: tasks.reduce((m, t) => (t.updated_at > m ? t.updated_at : m), ""), active: tasks.some((t) => ACTIVE.has(t.status)),
+        needs: tasks.some((t) => NEEDS_YOU.has(t.status)), activeWork: tasks.find((t) => t.workflow !== "chat_workflow" && ACTIVE.has(t.status)),
+      };
+    });
+  }
+  const getConv = (key = S.conv) => conversations().find((c) => c.key === key) || null;
 
   function welcome() {
     const ex = [
@@ -408,24 +433,22 @@
   }
 
   function workingRow() {
-    const tasks = S.selected ? [S.taskMap.get(S.selected)].filter(Boolean) : S.tasks.filter((t) => WORKING.has(t.status));
-    const t = tasks.find((x) => WORKING.has(x.status));
+    const working = convTasks().filter((x) => WORKING.has(x.status));
+    const t = working[0];
     if (!t) return null;
-    const more = !S.selected && tasks.filter((x) => WORKING.has(x.status)).length > 1 ? ` (+${tasks.filter((x) => WORKING.has(x.status)).length - 1} more)` : "";
+    const more = working.length > 1 ? ` (+${working.length - 1} more)` : "";
+    const label = t.workflow === "chat_workflow" ? `Thinking…${more}`
+      : `${STATUS[t.status][0]}${t.phase ? " · " + t.phase : ""} — ${t.goal.slice(0, 70)}${t.goal.length > 70 ? "…" : ""}${more}`;
     return h("div", { class: "msg assistant", id: "workingRow" }, h("div", { class: "avatar logo" }),
       h("div", { class: "bubble" }, h("div", { class: "card status compact" }, h("div", { class: "working" },
-        h("span", { class: "typing" }, h("span"), h("span"), h("span")),
-        h("span", {}, `${STATUS[t.status][0]}${t.phase ? " · " + t.phase : ""} — ${t.goal.slice(0, 70)}${t.goal.length > 70 ? "…" : ""}${more}`)))));
+        h("span", { class: "typing" }, h("span"), h("span"), h("span")), h("span", {}, label)))));
   }
 
   function renderFeed({ scroll = false } = {}) {
     const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120;
     const msgs = visibleMessages();
     const next = h("div", { class: "feed-inner" });
-    if (!msgs.length) {
-      if (S.selected) next.appendChild(h("div", { class: "welcome" }, h("p", {}, "No messages for this task yet.")));
-      else next.appendChild(welcome());
-    }
+    if (!msgs.length) next.appendChild(welcome());
     let lastDay = null, prev = null;
     for (const m of msgs) {
       const day = new Date(m.created_at).toDateString();
@@ -478,7 +501,8 @@
       S.messages.set(m.id, m);
       if (isApproval(m)) S.approvals.delete(approvalId(m));
       if (!S.firstLoad && isNew && m.role === "assistant") {
-        fresh++;
+        if (convOfMsg(m) && convOfMsg(m) !== S.conv) { S.unreadConv.add(convOfMsg(m)); renderTasks(); }
+        else fresh++;
         const t = m.task_id ? S.taskMap.get(m.task_id) : null;
         if (isApproval(m)) notify("Approval needed", m.text.split("\n").find((l) => l.startsWith("Action:")) || m.text, m.task_id);
         else if (/^Task [A-Z0-9]{6} (completed|partial|failed)/.test(m.text)) notify(m.text.split("\n")[0], t ? t.goal : "", m.task_id);
@@ -520,61 +544,77 @@
   function renderTasks() {
     const list = $("taskList"); list.replaceChildren();
     const q = S.query.trim().toLowerCase();
-    const items = S.tasks.filter((t) => {
-      if (S.filter === "active" && !ACTIVE.has(t.status)) return false;
-      if (S.filter === "done" && ACTIVE.has(t.status)) return false;
-      return !q || t.goal.toLowerCase().includes(q) || t.task_id.toLowerCase().includes(q) || wf(t.workflow)[0].toLowerCase().includes(q);
+    const convs = conversations();
+    const items = convs.filter((c) => {
+      if (S.filter === "active" && !c.active) return false;
+      if (S.filter === "done" && c.active) return false;
+      return !q || c.tasks.some((t) => t.goal.toLowerCase().includes(q) || t.task_id.toLowerCase().includes(q)) || wf(c.workflow)[0].toLowerCase().includes(q);
     });
+    const draft = !convs.some((c) => c.key === S.conv) && S.filter !== "done" && !q;
+    if (draft) {
+      list.appendChild(h("button", { class: "task-item selected", onclick: () => $("app").classList.remove("sidebar-open") },
+        h("span", { class: "wf" }, icon("message-square")), h("span", { class: "goal" }, "New chat"), h("span", { class: "when" }),
+        h("span", { class: "meta" }, "Nothing sent yet")));
+    }
     if (!items.length) {
-      list.appendChild(h("div", { class: "task-empty" }, S.tasks.length ? "No matching tasks" : "No tasks yet. Start one below."));
+      if (!draft) list.appendChild(h("div", { class: "task-empty" }, convs.length ? "No matching chats" : "No chats yet. Start one below."));
       return;
     }
-    const needs = items.filter((t) => ["AWAITING_APPROVAL", "AWAITING_USER", "BLOCKED"].includes(t.status));
-    const groups = [["Needs you", needs]];
-    const rest = items.filter((t) => !needs.includes(t));
+    const needs = items.filter((c) => c.needs);
+    const rest = items.filter((c) => !c.needs);
     const today = new Date().toDateString();
-    groups.push(["Today", rest.filter((t) => new Date(t.created_at).toDateString() === today)]);
-    groups.push(["Earlier", rest.filter((t) => new Date(t.created_at).toDateString() !== today)]);
-    for (const [label, ts] of groups) {
-      if (!ts.length) continue;
+    const groups = [["Needs you", needs], ["Today", rest.filter((c) => new Date(c.latest.created_at).toDateString() === today)],
+      ["Earlier", rest.filter((c) => new Date(c.latest.created_at).toDateString() !== today)]];
+    for (const [label, cs] of groups) {
+      if (!cs.length) continue;
       list.appendChild(h("div", { class: "group-label" }, label));
-      for (const t of ts) {
-        const [wlabel, wicon] = wf(t.workflow); const [slabel, scls] = STATUS[t.status] || [t.status, ""];
-        list.appendChild(h("button", { class: `task-item ${S.selected === t.task_id ? "selected" : ""}`, onclick: () => selectTask(t.task_id), title: t.goal },
+      for (const c of cs) {
+        const [wlabel, wicon] = wf(c.workflow); const [slabel, scls] = STATUS[c.status] || [c.status, ""];
+        list.appendChild(h("button", { class: `task-item ${S.conv === c.key ? "selected" : ""} ${S.unreadConv.has(c.key) ? "unread" : ""}`,
+          onclick: () => openConv(c.key), title: c.title },
           h("span", { class: "wf" }, icon(wicon)),
-          h("span", { class: "goal" }, t.goal),
-          h("span", { class: "when" }, relTime(t.updated_at)),
-          h("span", { class: "meta" }, h("span", { class: `dot ${scls}` }), slabel, " · ", wlabel, " · #", short(t.task_id))));
+          h("span", { class: "goal" }, c.title),
+          h("span", { class: "when" }, relTime(c.updated_at)),
+          h("span", { class: "meta" }, h("span", { class: `dot ${scls}` }), slabel, " · ", wlabel,
+            c.tasks.length > 1 ? ` · ${c.tasks.length} requests` : "")));
       }
     }
   }
 
   function renderTop() {
     const top = $("topTitle"); top.replaceChildren();
-    const t = S.selected && S.taskMap.get(S.selected);
-    $("inspectorBtn").hidden = !S.selected;
-    if (!t) {
-      top.append(h("h1", {}, "Activity"), h("span", { class: "sub" }, `${S.tasks.filter((x) => ACTIVE.has(x.status)).length} active · ${S.tasks.length} total`));
-      return;
-    }
-    top.append(h("h1", { title: t.goal }, t.goal),
-      h("span", { class: "sub" }, h("button", { class: "back", onclick: () => selectTask(null) }, icon("arrow-left"), "Activity"),
-        pill(t.status), `${wf(t.workflow)[0]} · #${short(t.task_id)}`));
+    const c = getConv();
+    $("inspectorBtn").hidden = !(c && c.work);
+    if (!c) { top.append(h("h1", {}, "New chat"), h("span", { class: "sub" }, "A fresh conversation with its own context")); return; }
+    top.append(h("h1", { title: c.title }, c.title),
+      h("span", { class: "sub" }, pill(c.status), `${wf(c.workflow)[0]}${c.tasks.length > 1 ? ` · ${c.tasks.length} requests` : ` · #${short(c.latest.task_id)}`}`));
   }
 
-  function selectTask(id) {
-    if (id !== S.selected) S.detail = null;
-    S.selected = id || null;
+  // Open a chat: its own messages, its own reply target, its own details pane.
+  function openConv(key) {
+    S.conv = key; store.set(CONV_KEY, key); S.unreadConv.delete(key);
+    S.selected = null; S.detail = null;
     $("app").classList.remove("sidebar-open");
-    if (!id) { S.detail = null; setReply(null); }
-    else {
-      const t = S.taskMap.get(id);
-      setReply(t && ACTIVE.has(t.status) ? id : null);
-      if (window.innerWidth > 1180 && S.inspectorOpen) openInspector(true);
-      loadDetail(id);
-    }
-    if (!id) openInspector(false, true);
+    const c = getConv(key);
+    setReply(c && c.activeWork ? c.activeWork.task_id : null);
+    if (c && c.work) focusTask(c.work.task_id); else openInspector(false, true);
     renderTasks(); renderTop(); renderFeed({ scroll: true });
+  }
+  function newChat() {
+    if (!visibleMessages().length) { setReply(null); return; }  // the open chat is already empty
+    openConv(newConvId());
+  }
+  // Show one task's details without leaving the chat.
+  function focusTask(id, force) {
+    S.selected = id; S.detail = null;
+    if (!id) return;
+    if (force || (window.innerWidth > 1180 && S.inspectorOpen)) openInspector(true, true);
+    loadDetail(id);
+  }
+  function selectTask(id) {
+    const t = S.taskMap.get(id); if (!t) return;
+    if (convOfTask(t) !== S.conv) openConv(convOfTask(t));
+    focusTask(id, true);
   }
 
   // ---------------------------------------------------------------------------------------- inspector
@@ -746,16 +786,18 @@
     updateSend();
   }
   async function sendText(text, files = []) {
-    const fd = new FormData(); fd.append("text", text); for (const f of files) fd.append("files", f, f.name);
+    const conv = S.conv;
+    const fd = new FormData(); fd.append("text", text); fd.append("conversation_id", conv); for (const f of files) fd.append("files", f, f.name);
     S.sending = true; send.classList.add("busy"); updateSend();
     try {
       const r = await (await api("/ui/api/messages", { method: "POST", body: fd })).json();
-      if (r.task_id && r.task_id !== S.selected && !text.startsWith("/status")) {
-        await refreshTasks();
-        if (!/^\/(steer|answer|pause|resume|cancel)/.test(text)) selectTask(r.task_id);
-      } else refreshTasks();
-      if (r.reply && !S.selected) { /* replies appear in the feed */ }
-      else if (r.reply && S.selected && !r.task_id) toast(r.reply.split("\n")[0]);
+      await refreshTasks();
+      const t = r.task_id && S.taskMap.get(r.task_id);
+      // a long-running task started here becomes this chat's reply target; plain chat answers need no tracking
+      if (t && S.conv === conv && t.workflow !== "chat_workflow" && ACTIVE.has(t.status) && !/^\/(steer|answer|pause|resume|cancel|status)/.test(text)) {
+        setReply(t.task_id); focusTask(t.task_id);
+      }
+      renderTasks(); renderTop(); renderFeed({ scroll: true });
       return true;
     } catch (e) {
       if (!(e instanceof AuthError)) toast(`Not sent: ${e.message}`, "bad");
@@ -804,12 +846,11 @@
   let palIdx = 0, palItems = [];
   function paletteCommands() {
     const cmds = [
-      ["New task", "plus", () => newTask(), "N"],
+      ["New chat", "plus", () => newTask(), "N"],
       ["Research a topic", "book", () => { newTask(); setMode(1); }],
       ["Browse a website", "globe", () => { newTask(); setMode(3); }],
       ["Analyse a video", "video", () => { newTask(); setMode(2); }],
       ["Office task", "briefcase", () => { newTask(); setMode(4); }],
-      ["Show activity", "list", () => selectTask(null)],
       ["Budget", "wallet", () => showBudget()],
       ["Schedules", "calendar", () => sendText("/schedules")],
       ["Toggle theme", "sun", () => cycleTheme()],
@@ -818,9 +859,9 @@
       ["Keyboard shortcuts", "help", () => showShortcuts(), "?"],
       ["Sign out of this browser", "x", () => { store.set(TOKEN_KEY, null); S.token = null; pollGen++; showLogin(true); }],
     ];
-    if (S.selected) {
-      const t = S.taskMap.get(S.selected);
-      if (t && ACTIVE.has(t.status)) {
+    {
+      const t = (getConv() || {}).activeWork;
+      if (t) {
         cmds.unshift([`Cancel #${short(t.task_id)}`, "stop", () => confirmCancel(t)]);
         cmds.unshift([t.status === "PAUSED" ? `Resume #${short(t.task_id)}` : `Pause #${short(t.task_id)}`, t.status === "PAUSED" ? "play" : "pause",
           () => taskAction(t.task_id, t.status === "PAUSED" ? "resume" : "pause")]);
@@ -833,8 +874,8 @@
   function renderPalette() {
     const q = $("paletteInput").value.trim().toLowerCase();
     const cmds = paletteCommands().filter(([l]) => !q || l.toLowerCase().includes(q)).map(([label, ic, run, hint]) => ({ group: "Commands", label, ic, run, hint }));
-    const tasks = S.tasks.filter((t) => !q || t.goal.toLowerCase().includes(q) || t.task_id.toLowerCase().includes(q)).slice(0, q ? 12 : 6)
-      .map((t) => ({ group: "Tasks", label: t.goal, ic: wf(t.workflow)[1], run: () => selectTask(t.task_id), hint: (STATUS[t.status] || [t.status])[0] }));
+    const tasks = conversations().filter((c) => !q || c.tasks.some((t) => t.goal.toLowerCase().includes(q) || t.task_id.toLowerCase().includes(q))).slice(0, q ? 12 : 6)
+      .map((c) => ({ group: "Chats", label: c.title, ic: wf(c.workflow)[1], run: () => openConv(c.key), hint: (STATUS[c.status] || [c.status])[0] }));
     palItems = q ? [...tasks, ...cmds] : [...cmds, ...tasks];
     palIdx = Math.min(palIdx, Math.max(0, palItems.length - 1));
     const list = $("paletteList"); list.replaceChildren();
@@ -890,13 +931,13 @@
     showModal("About this assistant", h("div", {}, facts, h("p", { style: "margin:16px 0 0;font-size:12.5px;color:var(--text-3)" }, "Change these in config/application.yaml and restart the assistant.")));
   }
   function showShortcuts() {
-    const rows = [["⌘K / Ctrl K", "Command palette"], ["N", "New task"], ["/", "Focus the message box"], ["Esc", "Close, or stop replying to a task"],
-      ["Enter", "Send"], ["Shift Enter", "New line"], ["Alt ↑ / Alt ↓", "Previous / next task"], ["?", "This list"]];
+    const rows = [["⌘K / Ctrl K", "Command palette"], ["N", "New chat"], ["/", "Focus the message box"], ["Esc", "Close, or stop replying to a task"],
+      ["Enter", "Send"], ["Shift Enter", "New line"], ["Alt ↑ / Alt ↓", "Previous / next chat"], ["?", "This list"]];
     const facts = h("dl", { class: "facts", style: "grid-template-columns:150px 1fr" });
     for (const [k, v] of rows) facts.append(h("dt", {}, h("kbd", {}, k)), h("dd", {}, v));
     showModal("Keyboard shortcuts", facts);
   }
-  function newTask() { selectTask(null); setReply(null); setMode(0); input.value = ""; autosize(); updateSend(); input.focus(); }
+  function newTask() { newChat(); setMode(0); input.value = ""; autosize(); updateSend(); input.focus(); }
 
   // ---------------------------------------------------------------------------------------- global events
   document.addEventListener("click", (e) => {
@@ -911,7 +952,11 @@
     else if (a === "attach") $("fileInput").click();
     else if (a === "open-sidebar") $("app").classList.add("sidebar-open");
     else if (a === "close-sidebar") $("app").classList.remove("sidebar-open");
-    else if (a === "toggle-inspector") openInspector($("inspector").hidden);
+    else if (a === "toggle-inspector") {
+      const c = getConv();
+      if ($("inspector").hidden && !S.selected && c && c.work) focusTask(c.work.task_id);
+      openInspector($("inspector").hidden);
+    }
     else if (a === "jump") { feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" }); $("jump").hidden = true; }
     else if (a === "close-lightbox") $("lightbox").hidden = true;
   });
@@ -932,9 +977,11 @@
       return;
     }
     if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && S.tasks.length) {
-      e.preventDefault(); const i = S.tasks.findIndex((t) => t.task_id === S.selected);
-      const n = e.key === "ArrowDown" ? Math.min(S.tasks.length - 1, i + 1) : Math.max(-1, i - 1);
-      selectTask(n < 0 ? null : S.tasks[n].task_id); return;
+      e.preventDefault();
+      const keys = conversations().map((c) => c.key);
+      if (!keys.includes(S.conv)) keys.unshift(S.conv);  // the empty chat being drafted sits above the list
+      const i = keys.indexOf(S.conv);
+      openConv(keys[Math.max(0, Math.min(keys.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]); return;
     }
     if (typing || e.metaKey || e.ctrlKey || e.altKey || !$("palette").hidden || !$("modal").hidden) return;
     if (e.key === "/") { e.preventDefault(); input.focus(); }
@@ -949,6 +996,7 @@
     try { S.info = await getJSON("/ui/api/info"); } catch (e) { if (e instanceof AuthError) return; }
     showLogin(false);
     await Promise.all([refreshTasks(), refreshBudget()]);
+    openConv(S.conv);
     pollLoop();
   }
   hydrateIcons(); applyTheme(); renderNotifyBtn(); renderModes(); updatePlaceholder(); updateSend(); renderFeed();

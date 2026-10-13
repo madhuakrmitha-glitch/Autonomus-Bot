@@ -138,10 +138,13 @@ class TaskRequest(_C):
     attachments: list[str] = Field(default_factory=list, description="Artifact IDs of owner-supplied inputs")
     worker_id: str | None = Field(default=None, description="Explicit job routing to a worker")
     params: dict[str, Any] = Field(default_factory=dict, description="Workflow parameters (e.g. video url, question)")
+    conversation_id: str | None = Field(default=None, max_length=64, pattern=r"^cnv_[A-Za-z0-9]+$",
+                                        description="Chat this task belongs to; chat replies only see their own conversation")
 
 
 class TaskView(_C):
     task_id: str
+    conversation_id: str | None = None
     status: TaskStatus
     workflow: str
     goal: str

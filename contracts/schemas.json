@@ -2251,6 +2251,21 @@
           "description": "Workflow parameters (e.g. video url, question)",
           "title": "Params",
           "type": "object"
+        },
+        "conversation_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^cnv_[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Chat this task belongs to; chat replies only see their own conversation",
+          "title": "Conversation Id"
         }
       },
       "required": [
@@ -2445,6 +2460,18 @@
         "task_id": {
           "title": "Task Id",
           "type": "string"
+        },
+        "conversation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conversation Id"
         },
         "status": {
           "$ref": "#/$defs/TaskStatus"
