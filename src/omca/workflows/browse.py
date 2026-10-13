@@ -105,6 +105,8 @@ async def browser_task(ctx) -> WorkflowOutcome:
     except RouteRejected as exc:
         return WorkflowOutcome("FAILED", f"No usable open vision route: {exc}", error_code="ROUTE_REJECTED")
     start = req.params.get("url") or (URL.search(ctx.task.goal).group(0) if URL.search(ctx.task.goal) else None)
+    if cfg.browser.engine == "browser_use":
+        return await browser_use_task(ctx, att, start)
     max_steps = min(int(req.params.get("max_steps", 25)), cfg.limits.max_actions_per_task)
 
     if start:
@@ -237,6 +239,56 @@ async def browser_task(ctx) -> WorkflowOutcome:
     return WorkflowOutcome("COMPLETED" if achieved else "PARTIAL", summary, limitations=list(ctx.limitations),
                            details={"steps": len(history), "evidence": evidence_ids, "verdict": verdict,
                                     "delivered": delivered.ok},
+                           checks_passed=achieved and delivered.ok)
+
+
+async def browser_use_task(ctx, att, start: str | None) -> WorkflowOutcome:
+    """Hand the whole goal to the Browser Use agent, then judge the result from its final page and screenshot."""
+    c = ctx.c
+    req = ctx.task.request
+    args: dict[str, Any] = {"goal": ctx.task.goal, "start_url": start}
+    if req.params.get("max_steps"):
+        args["max_steps"] = int(req.params["max_steps"])
+    ctx.progress("Browser Use agent is operating the browser", phase="browse")
+    out = await ctx.act("browser.agent_task", args, key="agent", attachment_id=att.id,
+                        preview=f"Browser Use agent: {truncate(ctx.task.goal, 200)}", retries=0)
+    if not out.ok:
+        return WorkflowOutcome("FAILED", f"The Browser Use agent did not finish: {_describe(out)}",
+                               limitations=list(ctx.limitations), error_code=out.error_code or "INTERNAL")
+    r = out.result
+    shot_id = r.get("screenshot_artifact_id")
+    shot = c.artifacts.read_bytes(shot_id) if shot_id else None
+    final_url = r.get("url") or "-"
+    verdict = {"achieved": False, "evidence": "not checked"}
+    if shot or r.get("text"):
+        verdict = await model_json(ctx, "review", [
+            {"role": "user", "content": (
+                f"Goal: {ctx.task.goal}\n"
+                f"Pages the agent visited, in order: {', '.join((r.get('urls') or [])[-8:]) or '-'}\n"
+                f"The agent's reported result: {truncate(str(r.get('final_result') or ''), 1500)}\n\n"
+                f"Final page: {final_url}\n" + untrusted(final_url, r.get("text") or "", 6000)
+                + "\n\nThe goal may have needed several steps, so earlier pages need not still be visible. Judging "
+                  "from this final page and screenshot, does the page state support the reported result, and is it "
+                  "consistent with the goal being achieved? Do not accept a result the page contradicts. Return "
+                  "JSON {\"achieved\": bool, \"evidence\": \"what on the page shows it\"}")},
+        ], key="verify", images=[ImageInput(shot, "image/png", shot_id)] if shot else None, default=verdict) or verdict
+    claimed = bool(r.get("success")) if r.get("done") else False
+    achieved = claimed and bool(verdict.get("achieved"))
+    if not r.get("done"):
+        ctx.note_limitation(f"the agent stopped after {r.get('steps')} steps without finishing")
+    if not (r.get("done") and r.get("success")):
+        for err in (r.get("errors") or [])[-3:]:
+            ctx.note_limitation(f"agent error: {truncate(str(err), 160)}")
+    if not achieved:
+        ctx.note_limitation("the goal could not be confirmed from the final page state")
+    summary = (f"{r.get('final_result') or 'The agent returned no summary.'}\n"
+               f"Verified from the page: {'yes' if achieved else 'no'} - {truncate(str(verdict.get('evidence')), 300)}\n"
+               f"Final page: {final_url} ({r.get('steps')} steps)")
+    delivered = await ctx.act("telegram.send_owner", {"text": truncate(summary, 3500)}, key="deliver")
+    return WorkflowOutcome("COMPLETED" if achieved else "PARTIAL", summary, limitations=list(ctx.limitations),
+                           details={"engine": "browser_use", "steps": r.get("steps"), "urls": r.get("urls"),
+                                    "screenshot_artifact_id": shot_id, "final_url": r.get("url"),
+                                    "verdict": verdict, "delivered": delivered.ok},
                            checks_passed=achieved and delivered.ok)
 
 

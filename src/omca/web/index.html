@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>OMCA Assistant</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M9 16a7 7 0 1 0 14 0a7 7 0 1 0 -14 0' fill='none' stroke='white' stroke-width='2.6'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/ui/assets/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="Tasks">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div class="brand-text"><strong>OMCA</strong><span>Assistant</span></div>
+      <button class="icon-btn only-mobile" data-action="close-sidebar" aria-label="Close tasks" data-icon="x"></button>
+    </div>
+    <button class="new-task" data-action="new-task"><span data-icon="plus"></span>New task<kbd class="kbd-hint">N</kbd></button>
+    <label class="search">
+      <span data-icon="search"></span>
+      <input id="taskSearch" type="search" placeholder="Search tasks" autocomplete="off" aria-label="Search tasks">
+    </label>
+    <div class="segmented" id="taskFilter" role="tablist" aria-label="Filter tasks">
+      <button role="tab" data-filter="all" aria-selected="true">All</button>
+      <button role="tab" data-filter="active">Active</button>
+      <button role="tab" data-filter="done">Done</button>
+    </div>
+    <nav class="task-list" id="taskList" aria-live="polite"></nav>
+    <div class="sidebar-foot">
+      <button class="budget" id="budget" data-action="budget" title="Model budget this month">
+        <div class="budget-row"><span>Budget</span><span id="budgetText">—</span></div>
+        <div class="meter"><div class="meter-fill" id="budgetFill"></div></div>
+      </button>
+      <div class="foot-actions">
+        <button class="icon-btn" data-action="palette" aria-label="Command palette (⌘K)" title="Command palette (⌘K)" data-icon="command"></button>
+        <button class="icon-btn" data-action="notifications" id="notifyBtn" aria-label="Notifications" title="Notifications" data-icon="bell"></button>
+        <button class="icon-btn" data-action="theme" id="themeBtn" aria-label="Theme" title="Theme" data-icon="monitor"></button>
+        <button class="icon-btn" data-action="settings" aria-label="About this assistant" title="About this assistant" data-icon="settings"></button>
+      </div>
+    </div>
+  </aside>
+  <div class="scrim" data-action="close-sidebar"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" data-action="open-sidebar" aria-label="Show tasks" data-icon="menu"></button>
+      <div class="topbar-title" id="topTitle">
+        <h1>Activity</h1>
+        <span class="sub">Everything the assistant is doing</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="conn" id="conn" title="Connection"><i></i><span>Connecting</span></span>
+        <button class="icon-btn" id="inspectorBtn" data-action="toggle-inspector" aria-label="Task details" title="Task details" data-icon="panel" hidden></button>
+      </div>
+    </header>
+
+    <section class="feed" id="feed" aria-live="polite" aria-label="Conversation"></section>
+    <button class="jump" id="jump" data-action="jump" hidden><span data-icon="arrow-down"></span>New messages</button>
+
+    <footer class="composer-wrap">
+      <div class="composer" id="composer">
+        <div class="reply-chip" id="replyChip" hidden></div>
+        <div class="attachments" id="attachments"></div>
+        <div class="slash-menu" id="slashMenu" role="listbox" hidden></div>
+        <textarea id="input" rows="1" placeholder="Describe a task…" aria-label="Message"></textarea>
+        <div class="composer-bar">
+          <div class="modes" id="modes" role="radiogroup" aria-label="Task type"></div>
+          <div class="composer-right">
+            <button class="icon-btn" data-action="attach" aria-label="Attach files" title="Attach files" data-icon="paperclip"></button>
+            <input type="file" id="fileInput" multiple hidden>
+            <button class="send" id="send" aria-label="Send" title="Send (Enter)" data-icon="send" disabled></button>
+          </div>
+        </div>
+      </div>
+      <div class="composer-hint"><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>/</kbd> commands · <kbd>⌘K</kbd> palette</div>
+    </footer>
+    <div class="dropzone" id="dropzone"><div><span data-icon="upload"></span>Drop files to attach</div></div>
+  </main>
+
+  <aside class="inspector" id="inspector" aria-label="Task details" hidden></aside>
+</div>
+
+<div class="overlay" id="palette" hidden>
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+    <label class="palette-search"><span data-icon="search"></span><input id="paletteInput" placeholder="Search tasks and commands…" autocomplete="off"></label>
+    <div class="palette-list" id="paletteList" role="listbox"></div>
+    <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> select</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+
+<div class="overlay" id="modal" hidden><div class="modal" role="dialog" aria-modal="true" id="modalBody"></div></div>
+
+<div class="overlay lightbox" id="lightbox" hidden data-action="close-lightbox"><img id="lightboxImg" alt=""></div>
+
+<div class="login" id="login" hidden>
+  <form class="login-card" id="loginForm">
+    <div class="logo big" aria-hidden="true"></div>
+    <h2>Connect to your assistant</h2>
+    <p>Run <code>uv run omca ui</code> to open this page signed in, or paste the owner token
+      (<code>OMCA_OWNER_TOKEN</code> in <code>~/.openclaw/.env</code>).</p>
+    <input id="tokenInput" type="password" placeholder="Owner token" autocomplete="off" aria-label="Owner token">
+    <button class="btn primary block" type="submit">Connect</button>
+    <p class="login-error" id="loginError" hidden>That token was not accepted.</p>
+  </form>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="/ui/assets/app.js"></script>
+</body>
+</html>

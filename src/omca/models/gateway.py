@@ -113,7 +113,7 @@ async def stream_chat_completions(router: ModelRouter, body: dict[str, Any], cal
         images=n_images,
         image_tokens=n_images * estimate_image_tokens(route.max_image_side, route.max_image_side, route.image_patch_px,
                                                       route.max_image_side),
-        max_output_tokens=max_tokens,
+        max_output_tokens=max_tokens + route.output_overrun_tokens,
     )
     try:
         call_id = router.ledger.reserve(route, est, task_id=None, purpose="framework", caller=caller)

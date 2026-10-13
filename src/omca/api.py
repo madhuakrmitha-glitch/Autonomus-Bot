@@ -13,12 +13,14 @@ network with TLS; never publish browser debugging ports or model endpoints.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
+import re
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from . import __version__
@@ -82,6 +84,16 @@ class BridgeCallback(BaseModel):
 
 class FireRequest(BaseModel):
     planned_at: str | None = None
+
+
+class UiCallback(BaseModel):
+    data: str
+
+
+UI_IDENTITY = Identity("owner_api", "web-ui")
+UI_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+UI_ASSETS = {"app.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8"}
+UI_TASK_REF = re.compile(r"^/(?:omca\s+)?(?:steer|answer|status|pause|resume|cancel)\s+(\S+)", re.I)
 
 
 def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
@@ -279,6 +291,106 @@ def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
         m = coord.artifacts.get(artifact_id)
         return Response(coord.artifacts.read_bytes(artifact_id), media_type=m.media_type if m else "application/octet-stream",
                         headers={"X-OMCA-SHA256": m.sha256 if m else ""})
+
+    # -- local web UI ----------------------------------------------------------------------------------------
+    if coord.web_inbox is not None:
+        inbox = coord.web_inbox
+
+        @app.get("/ui", tags=["ui"], response_class=HTMLResponse, include_in_schema=False)
+        def ui_page() -> HTMLResponse:
+            from importlib import resources
+
+            return HTMLResponse((resources.files("omca.web") / "index.html").read_text(encoding="utf-8"),
+                                headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY",
+                                         "Referrer-Policy": "no-referrer"})
+
+        @app.get("/ui/assets/{name}", tags=["ui"], include_in_schema=False)
+        def ui_asset(name: str) -> Response:
+            from importlib import resources
+
+            if name not in UI_ASSETS:
+                raise HTTPException(404, "unknown asset")
+            return Response((resources.files("omca.web") / name).read_bytes(), media_type=UI_ASSETS[name],
+                            headers={"Cache-Control": "no-cache"})
+
+        @app.get("/ui/api/messages", tags=["ui"], summary="Conversation changes since a revision (long poll)")
+        async def ui_messages(after: int = 0, wait: float = 0, ident: Identity = Depends(owner)) -> dict[str, Any]:
+            deadline = asyncio.get_running_loop().time() + max(0.0, min(wait, 25.0))
+            while True:
+                items = inbox.feed(after)
+                if items or asyncio.get_running_loop().time() >= deadline:
+                    return {"messages": items, "rev": items[-1]["rev"] if items else after}
+                await asyncio.sleep(0.4)
+
+        @app.get("/ui/api/info", tags=["ui"], summary="Assistant configuration summary for the web UI")
+        def ui_info(ident: Identity = Depends(owner)) -> dict[str, Any]:
+            roles = {}
+            for role in ("planning", "vision", "summarisation", "review"):
+                rid = getattr(cfg.models.roles, role)
+                r = cfg.models.route(rid) if rid else None
+                roles[role] = {"route": rid, "model": r.model if r else None}
+            return {"version": __version__, "telegram_mode": cfg.telegram.mode,
+                    "telegram_connected": coord.notifier.channel is not None and bool(coord.notifier.owner_ids()),
+                    "browser_engine": cfg.browser.engine, "browser_approval": cfg.browser.agent.require_approval,
+                    "browser_authorized": any(a.authorized for a in cfg.browser.attachments),
+                    "search_adapter": cfg.search.adapter, "roles": roles, "timezone": cfg.owner.display_timezone,
+                    "currency": cfg.budget.currency, "per_task_ceiling": cfg.budget.per_task_reservation_ceiling}
+
+        @app.get("/ui/api/tasks/{task_id}", tags=["ui"], summary="Task details with model spend")
+        def ui_task(task_id: str, ident: Identity = Depends(owner)) -> dict[str, Any]:
+            t = view(task_id)
+            return {**t.model_dump(mode="json"), "spend": coord.ledger.task_spend(t.task_id),
+                    "currency": cfg.budget.currency}
+
+        @app.post("/ui/api/messages", tags=["ui"], summary="Send an owner message or command from the web UI")
+        async def ui_send(text: str = Form(default=""), files: list[UploadFile] = File(default=[]),
+                          ident: Identity = Depends(owner)) -> dict[str, Any]:
+            from .util import new_id
+
+            attachments = []
+            for f in files[:10]:
+                data = await f.read(UI_MAX_UPLOAD_BYTES + 1)
+                if len(data) > UI_MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, f"{f.filename} is larger than 20 MB")
+                attachments.append((f.filename or "file", data))
+            if not text.strip() and not attachments:
+                raise HTTPException(400, "empty message")
+            names = ", ".join(n for n, _ in attachments)
+            mid = inbox.add("owner", text.strip() + (f"\n[attached: {names}]" if names else ""))
+            newest = coord.tasks.list(limit=1)
+            before = newest[0].id if newest else None
+            reply = await iface.handle_message(UI_IDENTITY, text, update_id=new_id("web"), attachments=attachments)
+            # thread the message: the task it created, or the task a command addressed
+            task_id = None
+            created = coord.tasks.list(limit=1)
+            if created and created[0].id != before:
+                task_id = created[0].id
+            elif (m := UI_TASK_REF.match(text.strip())) and (t := coord.tasks.by_short_id(m.group(1))):
+                task_id = t.id
+            if task_id:
+                inbox.link_task(mid, task_id)
+            if reply:
+                inbox.add("assistant", reply, task_id=task_id)
+            await coord.notifier.flush()
+            return {"reply": reply, "task_id": task_id}
+
+        @app.post("/ui/api/callback", tags=["ui"], summary="Press an inline button (approvals) from the web UI")
+        async def ui_callback(body: UiCallback, ident: Identity = Depends(owner)) -> dict[str, Any]:
+            from .util import new_id
+
+            reply = await iface.handle_callback(UI_IDENTITY, body.data, callback_id=new_id("webcb"))
+            await coord.notifier.flush()
+            return {"reply": reply}
+
+        @app.get("/ui/api/files/{message_id}", tags=["ui"], response_class=Response)
+        def ui_file(message_id: int, ident: Identity = Depends(owner)) -> Response:
+            doc = inbox.document(message_id)
+            if doc is None:
+                raise HTTPException(404, "unknown document")
+            name, data = doc
+            safe = name.replace('"', "").replace("\r", "").replace("\n", "")
+            return Response(data, media_type="application/octet-stream",
+                            headers={"Content-Disposition": f'attachment; filename="{safe}"'})
 
     # -- OpenClaw bridge -------------------------------------------------------------------------------------
     @app.post("/bridge/openclaw/message", tags=["bridge"], dependencies=[Depends(bridge)],

@@ -76,6 +76,20 @@ uv run omca run --with-worker vm1                      # coordinator + in-proces
 Then message the bot: `/research rooftop solar adoption in India` → a cited `.docx` arrives in Telegram
 and is saved to the reports folder.
 
+## Local web UI
+
+With `ui.enabled: true`, the coordinator also serves a chat UI at `http://127.0.0.1:8765/ui`: the same
+commands, free-text tasks, approval buttons and report downloads as Telegram, plus a task sidebar with
+pause/resume/cancel and the month's budget. `uv run omca ui` opens it signed in (the owner API token is
+passed in the URL fragment and kept in the browser's local storage). Every owner message is mirrored to the
+UI; when Telegram is not configured the UI is the delivery channel, and when it is, both receive messages.
+
+## Browser engines
+
+`/browse` runs on the built-in step loop (one model-chosen action at a time, each checked by the policy gate)
+or, with `browser.engine: browser_use`, on the [Browser Use](docs/browser-use.md) agent in its own virtualenv,
+which navigates real websites more reliably. Its model calls still go through the metered gateway.
+
 ## Owner commands (Telegram)
 
 `/research <topic>` · `/video <url> [question]` · `/browse <goal>` · `/office <goal>` · `/tasks` ·

@@ -219,6 +219,31 @@ def cmd_openclaw(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    import webbrowser
+
+    from .secrets import resolve
+
+    cfg = _load(args.config)
+    if not cfg.ui.enabled:
+        print("The web UI is disabled; set ui.enabled: true in the application configuration.", file=sys.stderr)
+        return 1
+    token = resolve(cfg.server.owner_api_token_ref)
+    if not token:
+        print(f"The owner API token is not available ({cfg.server.owner_api_token_ref}).", file=sys.stderr)
+        return 1
+    scheme = "https" if cfg.server.tls_cert_file else "http"
+    host = "127.0.0.1" if cfg.server.host in ("0.0.0.0", "::") else cfg.server.host
+    base = f"{scheme}://{host}:{cfg.server.port}/ui"
+    # the token travels in the URL fragment, which the browser never sends to the server
+    url = f"{base}#token={token}"
+    if args.print_url or not webbrowser.open(url):
+        print(url)
+    else:
+        print(f"Opened {base} (start the coordinator first with `omca run`)")
+    return 0
+
+
 def cmd_retention(args: argparse.Namespace) -> int:
     from .coordinator import Coordinator
 
@@ -270,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="also keep the display awake (needed for raw desktop input)")
     s.set_defaults(fn=cmd_service)
 
-    s = sub.add_parser("run", help="run the coordinator service (API, scheduler, Telegram)")
+    s = sub.add_parser("run", help="run the coordinator service (API, web UI, scheduler, Telegram)")
     s.add_argument("--config", default=DEFAULT_CONFIG)
     s.add_argument("--with-worker", metavar="WORKER_ID", help="also run this worker in-process (single-VM setup)")
     s.set_defaults(fn=cmd_run)
@@ -326,6 +351,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--config", default=DEFAULT_CONFIG)
     s.add_argument("--mcp-command", default="omca")
     s.set_defaults(fn=cmd_openclaw)
+
+    s = sub.add_parser("ui", help="open the local owner web UI in the browser (signed in)")
+    s.add_argument("--config", default=DEFAULT_CONFIG)
+    s.add_argument("--print-url", action="store_true", help="print the signed-in URL instead of opening it")
+    s.set_defaults(fn=cmd_ui)
 
     s = sub.add_parser("retention", help="apply retention now")
     s.add_argument("action", choices=["run"])

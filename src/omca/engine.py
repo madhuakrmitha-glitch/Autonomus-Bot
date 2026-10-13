@@ -640,6 +640,8 @@ class TaskContext:
             if prior is not None and prior["status"] in ("DONE", "EXPIRED", "CANCELLED"):
                 self.c.workers.supersede_job(prior["id"])
         timeout = 600.0 if intent.operation in ("media.fetch", "browser.video_frames", "browser.download") else 90.0
+        if intent.operation == "browser.agent_task":
+            timeout = self.config.browser.agent.max_minutes * 60 + 120  # agent time plus browser start and upload
         job = WorkerJob(job_id=new_id("job"), task_id=self.task.id, action_id=intent.action_id, worker_id=wid,
                         lease_id=lease.lease_id, resource=resource, fencing_token=lease.fencing_token,
                         operation=intent.operation, arguments=args, expected=intent.expected,

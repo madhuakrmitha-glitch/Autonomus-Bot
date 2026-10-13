@@ -3,7 +3,8 @@
 A route can serve a call only when *all* of these hold:
 
 * it is declared in configuration (the allowlist) and enabled;
-* it records open weights with a license and the model name is not a known closed model;
+* it records open weights with a license and the model name is not a known closed model, or the owner
+  set ``models.allow_closed_models`` and the route honestly declares ``open_weights: false``;
 * billing can be metered (local routes are free; hosted routes need prices and FX);
 * the required capability probes passed for the route's current configuration digest;
 * it supports the modalities the call needs (e.g. images for vision).
@@ -45,10 +46,13 @@ class RouteState:
 
 
 def route_digest(route: ModelRoute) -> str:
-    return digest({
+    fields = {
         "provider": route.provider, "base_url": route.base_url, "model": route.model, "revision": route.revision,
         "modalities": sorted(route.modalities), "tools": route.supports_tools, "extra_body": route.extra_body,
-    })
+    }
+    if route.output_overrun_tokens:  # only when set, so existing probe results stay valid
+        fields["output_overrun_tokens"] = route.output_overrun_tokens
+    return digest(fields)
 
 
 def required_probes(route: ModelRoute) -> list[str]:
@@ -63,16 +67,17 @@ class ModelRegistry:
 
     # -- allowlist ----------------------------------------------------------------
     def open_model_problem(self, route: ModelRoute) -> str | None:
+        if route.provider == "fixture" and not self.config.models.allow_fixture_routes:
+            return "fixture routes are test-only"
         if not route.open_weights:
-            return "route does not record open weights"
+            # a closed model is acceptable only when declared as such and the owner opted in
+            return None if self.config.models.allow_closed_models else "route does not record open weights"
         if (route.license or "").strip().lower() in CLOSED_LICENSES:
             return f"license {route.license!r} does not permit the intended use"
         name = route.model.lower()
         for pat in CLOSED_MODEL_PATTERNS:
             if re.search(pat, name):
                 return f"model {route.model} matches the closed-model denylist"
-        if route.provider == "fixture" and not self.config.models.allow_fixture_routes:
-            return "fixture routes are test-only"
         return None
 
     def probes_passed(self, route: ModelRoute) -> tuple[bool, list[str]]:

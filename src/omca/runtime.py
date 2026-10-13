@@ -19,8 +19,9 @@ def build_channel(config: ApplicationConfig):
         return None
     token = resolve(config.telegram.bot_token_ref)
     if not token:
-        log.warning("Telegram bot token is not available (%s); owner messages cannot be delivered",
-                    config.telegram.bot_token_ref)
+        log.warning("Telegram bot token is not available (%s); owner messages %s",
+                    config.telegram.bot_token_ref,
+                    "go to the web UI only" if config.ui.enabled else "cannot be delivered")
         return None
     from .channels.telegram import TelegramBotApi
 
@@ -29,7 +30,8 @@ def build_channel(config: ApplicationConfig):
 
 def build_worker_handlers(attachments: list[BrowserAttachment], *, smtp: SmtpConfig | None = None,
                           allowed_extensions: list[str] | None = None, max_text_chars: int = 20000,
-                          capabilities: list[str] | None = None) -> tuple[dict[str, Any], Any]:
+                          capabilities: list[str] | None = None,
+                          browser_agent: Any | None = None) -> tuple[dict[str, Any], Any]:
     caps = set(capabilities or ["browser", "video", "document", "spreadsheet", "email", "calendar"])
     handlers: dict[str, Any] = {}
     browser = None
@@ -39,6 +41,10 @@ def build_worker_handlers(attachments: list[BrowserAttachment], *, smtp: SmtpCon
 
             browser = BrowserManager(attachments, max_text_chars)
             handlers.update(make_browser_handlers(browser, allowed_extensions=allowed_extensions))
+            if browser_agent is not None:
+                from .worker.browser_agent import make_browser_agent_handlers
+
+                handlers.update(make_browser_agent_handlers(browser, browser_agent))
         except ImportError:
             log.warning("Playwright is not installed; browser capability disabled")
     if "video" in caps:
@@ -50,6 +56,34 @@ def build_worker_handlers(attachments: list[BrowserAttachment], *, smtp: SmtpCon
 
         handlers.update(make_office_handlers(smtp))
     return handlers, browser
+
+
+def local_browser_agent(config: ApplicationConfig):
+    """Browser Use settings for a worker in the coordinator's process: the agent calls the local model gateway."""
+    if config.browser.engine != "browser_use":
+        return None
+    from .worker.browser_agent import BrowserAgentSettings
+
+    token = resolve(config.server.model_gateway_token_ref)
+    if not token:
+        log.warning("browser.engine is browser_use but the model gateway token is not available (%s)",
+                    config.server.model_gateway_token_ref)
+        return None
+    s = config.server
+    host = "127.0.0.1" if s.host in ("0.0.0.0", "::") else s.host
+    url = f"{'https' if s.tls_cert_file else 'http'}://{host}:{s.port}/v1"
+    return BrowserAgentSettings(config.browser.agent, url, token, config.browser.max_page_text_chars)
+
+
+def remote_browser_agent(cfg: WorkerProcessConfig):
+    """Browser Use settings for a standalone worker (``browser_agent`` in worker.yaml)."""
+    ba = cfg.browser_agent
+    if ba is None:
+        return None
+    from .worker.browser_agent import BrowserAgentSettings
+
+    url = ba.gateway_url or f"{cfg.coordinator_url.rstrip('/')}/v1"
+    return BrowserAgentSettings(ba, url, require(ba.gateway_token_ref, "browser_agent.gateway_token_ref"))
 
 
 class InProcessWorker:
@@ -70,7 +104,8 @@ class InProcessWorker:
         caps = capabilities or list(entry.capabilities)
         handlers, self.browser = build_worker_handlers(
             atts, smtp=smtp, allowed_extensions=coord.config.policy.download_allowed_extensions,
-            max_text_chars=coord.config.browser.max_page_text_chars, capabilities=caps)
+            max_text_chars=coord.config.browser.max_page_text_chars, capabilities=caps,
+            browser_agent=local_browser_agent(coord.config))
         self.agent = WorkerAgent(worker_id, InProcessTransport(coord, worker_id), workspace=workspace,
                                  capabilities=caps, attachments=atts, handlers=handlers, claim_wait_seconds=1.0)
         self._task: asyncio.Task | None = None
@@ -131,7 +166,8 @@ async def run_worker(cfg: WorkerProcessConfig) -> None:
     transport = HttpTransport(cfg.coordinator_url, cfg.worker_id, token, cfg.ca_file)
     handlers, browser = build_worker_handlers(cfg.attachments, smtp=cfg.smtp,
                                               allowed_extensions=cfg.allowed_download_extensions,
-                                              capabilities=list(cfg.capabilities))
+                                              capabilities=list(cfg.capabilities),
+                                              browser_agent=remote_browser_agent(cfg))
     agent = WorkerAgent(cfg.worker_id, transport, workspace=cfg.workspace_dir, capabilities=list(cfg.capabilities),
                         attachments=cfg.attachments, handlers=handlers, claim_wait_seconds=cfg.claim_wait_seconds)
     try:

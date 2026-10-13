@@ -53,6 +53,7 @@ class Lease:
 # Output kinds a job may upload; anything else is refused (FR25: only declared outputs transfer).
 OP_OUTPUTS: dict[str, list[str]] = {
     "browser.observe": ["screenshot"],
+    "browser.agent_task": ["screenshot"],
     "browser.read_page": ["screenshot"],
     "browser.click": ["screenshot"],
     "browser.click_point": ["screenshot"],
