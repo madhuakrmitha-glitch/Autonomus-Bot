@@ -2181,6 +2181,7 @@
             "video_analysis",
             "browser_task",
             "desktop_workflow",
+            "chat_workflow",
             "auto"
           ],
           "title": "Workflow",
