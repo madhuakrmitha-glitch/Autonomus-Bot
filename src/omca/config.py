@@ -375,7 +375,30 @@ class BrowserAgentConfig(_Base):
         return validate_ref(v, "browser.agent.gateway_token_ref")
 
 
+class BrowserCredential(_Base):
+    """A login the browser may use on one origin. The model only ever sees the id and the origin: it types the
+    placeholder ``{{cred:ID.username}}`` / ``{{cred:ID.password}}`` and the worker substitutes the secret."""
+
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    origin: str = Field(description="Exact origin the login is valid for, e.g. https://github.com (no wildcards)")
+    username_ref: str | None = None
+    password_ref: str | None = None
+
+    @field_validator("origin")
+    @classmethod
+    def _origin(cls, v: str) -> str:
+        if not re.fullmatch(r"https?://[^/*?#\s]+", v):
+            raise ValueError("credential origin must look like https://host[:port] without a path or wildcards")
+        return v.lower()
+
+    @field_validator("username_ref", "password_ref")
+    @classmethod
+    def _ref(cls, v: str | None, info: Any) -> str | None:
+        return validate_ref(v, f"browser.credentials[].{info.field_name}")
+
+
 class BrowserConfig(_Base):
+    credentials: list[BrowserCredential] = Field(default_factory=list)
     attachments: list[BrowserAttachment] = Field(default_factory=list)
     screenshot_max_side_for_model: int = 1280
     max_page_text_chars: int = 20000
@@ -573,6 +596,9 @@ class WorkerProcessConfig(_Base):
     browser_agent: BrowserAgentConfig | None = Field(
         default=None, description="Browser Use agent (needs gateway_url and gateway_token_ref on standalone workers)")
 
+    browser_credentials: list[BrowserCredential] = Field(
+        default_factory=list, description="Logins the worker may type into matching origins (same entries as "
+                                          "browser.credentials on the coordinator)")
     @field_validator("credential_ref")
     @classmethod
     def _ref(cls, v: str) -> str:

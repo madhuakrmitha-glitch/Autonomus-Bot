@@ -72,6 +72,7 @@ async def run(req: dict[str, Any]) -> dict[str, Any]:
                   max_failures=int(req.get("max_failures", 3)),
                   max_actions_per_step=int(req.get("max_actions_per_step", 4)),
                   extend_system_message=req.get("extra_instructions") or None,
+                  sensitive_data=req.get("sensitive_data") or None,
                   calculate_cost=False, generate_gif=False)
     final: dict[str, Any] = {}
     try:

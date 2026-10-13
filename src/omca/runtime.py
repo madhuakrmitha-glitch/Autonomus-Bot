@@ -31,7 +31,8 @@ def build_channel(config: ApplicationConfig):
 def build_worker_handlers(attachments: list[BrowserAttachment], *, smtp: SmtpConfig | None = None,
                           allowed_extensions: list[str] | None = None, max_text_chars: int = 20000,
                           capabilities: list[str] | None = None,
-                          browser_agent: Any | None = None) -> tuple[dict[str, Any], Any]:
+                          browser_agent: Any | None = None,
+                          credentials: list[Any] | None = None) -> tuple[dict[str, Any], Any]:
     caps = set(capabilities or ["browser", "video", "document", "spreadsheet", "email", "calendar"])
     handlers: dict[str, Any] = {}
     browser = None
@@ -40,11 +41,12 @@ def build_worker_handlers(attachments: list[BrowserAttachment], *, smtp: SmtpCon
             from .worker.browser import BrowserManager, make_browser_handlers
 
             browser = BrowserManager(attachments, max_text_chars)
-            handlers.update(make_browser_handlers(browser, allowed_extensions=allowed_extensions))
+            handlers.update(make_browser_handlers(browser, allowed_extensions=allowed_extensions,
+                                                    credentials=credentials))
             if browser_agent is not None:
                 from .worker.browser_agent import make_browser_agent_handlers
 
-                handlers.update(make_browser_agent_handlers(browser, browser_agent))
+                handlers.update(make_browser_agent_handlers(browser, browser_agent, credentials))
         except ImportError:
             log.warning("Playwright is not installed; browser capability disabled")
     if "video" in caps:
@@ -105,7 +107,7 @@ class InProcessWorker:
         handlers, self.browser = build_worker_handlers(
             atts, smtp=smtp, allowed_extensions=coord.config.policy.download_allowed_extensions,
             max_text_chars=coord.config.browser.max_page_text_chars, capabilities=caps,
-            browser_agent=local_browser_agent(coord.config))
+            browser_agent=local_browser_agent(coord.config), credentials=coord.config.browser.credentials)
         self.agent = WorkerAgent(worker_id, InProcessTransport(coord, worker_id), workspace=workspace,
                                  capabilities=caps, attachments=atts, handlers=handlers, claim_wait_seconds=1.0)
         self._task: asyncio.Task | None = None
@@ -167,7 +169,8 @@ async def run_worker(cfg: WorkerProcessConfig) -> None:
     handlers, browser = build_worker_handlers(cfg.attachments, smtp=cfg.smtp,
                                               allowed_extensions=cfg.allowed_download_extensions,
                                               capabilities=list(cfg.capabilities),
-                                              browser_agent=remote_browser_agent(cfg))
+                                              browser_agent=remote_browser_agent(cfg),
+                                              credentials=cfg.browser_credentials)
     agent = WorkerAgent(cfg.worker_id, transport, workspace=cfg.workspace_dir, capabilities=list(cfg.capabilities),
                         attachments=cfg.attachments, handlers=handlers, claim_wait_seconds=cfg.claim_wait_seconds)
     try:

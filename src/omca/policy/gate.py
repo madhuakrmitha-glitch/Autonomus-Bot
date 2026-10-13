@@ -48,6 +48,7 @@ class PolicyGate:
             "standing_rules": [r.model_dump(mode="json") for r in config.policy.standing_rules],
             "contacts": [c.model_dump() for c in config.policy.contacts],
             "extra_terms": config.policy.extra_consequential_terms,
+            "credentials": [[c.id, c.origin] for c in config.browser.credentials],
             "approval_expiry_minutes": config.limits.approval_expiry_minutes,
         }
         self.version = "pol_" + digest(content)[:16]

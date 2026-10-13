@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import ApplicationConfig
 from ..contracts import ActionCategory, ElementRef, Observation
+from ..credentials import parse_placeholder, placeholder_problem
 from ..netguard import is_private_host, normalize_host, origin_matches, origin_of, url_problem
 
 __all__ = ["is_private_host", "origin_matches", "origin_of"]  # re-exported for the gate and the engine
@@ -436,8 +437,25 @@ def _type(args: BaseModel, target: dict[str, Any], ctx: PolicyContext) -> Classi
     el = _element(ctx, args.ref)
     if el is None:
         return Classification(C.FORBIDDEN, f"element ref {args.ref} is not in the current observation")
+    parsed = parse_placeholder(args.text)
+    if parsed is not None:
+        # a configured login for this origin: the worker substitutes the secret, the model never sees it
+        problem = placeholder_problem(args.text, ctx.config.browser.credentials, _page_url(ctx))
+        if problem:
+            return Classification(C.FORBIDDEN, f"credential placeholder refused: {problem}", element=el)
+        if parsed[1] == "password" and el.input_type != "password":
+            return Classification(C.FORBIDDEN, "a password placeholder may only be typed into a password field", element=el)
+        if not (el.editable or el.role in EDITABLE_ROLES):
+            return Classification(C.UNKNOWN_MUTATION, f"{el.role} '{el.name[:60]}' is not a text field", element=el)
+        c = Classification(C.CONSEQUENTIAL if args.submit else C.DRAFT,
+                           f"enters the configured {parsed[1]} for '{parsed[0]}' into '{el.name[:60]}'", element=el,
+                           destination=_page_url(ctx))
+        if args.submit:
+            c.consequence = "Enters a stored login and submits the form"
+        return c
     if el.input_type == "password" or SENSITIVE_INPUT.search(el.name or ""):
-        return Classification(C.FORBIDDEN, "typing into credential or payment fields is a human step", element=el)
+        return Classification(C.FORBIDDEN, "typing literal text into credential or payment fields is a human step; "
+                                           "use a configured {{cred:ID.password}} placeholder", element=el)
     if not (el.editable or el.role in EDITABLE_ROLES):
         return Classification(C.UNKNOWN_MUTATION, f"{el.role} '{el.name[:60]}' is not a text field", element=el)
     if args.submit:

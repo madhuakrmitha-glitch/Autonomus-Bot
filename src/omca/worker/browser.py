@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
-from ..config import BrowserAttachment
+from ..config import BrowserAttachment, BrowserCredential
 from ..contracts import (
     ElementRef,
     ErrorCode,
@@ -33,6 +33,7 @@ from ..contracts import (
     Viewport,
     WorkerJob,
 )
+from ..credentials import parse_placeholder, substitute
 from ..netguard import UrlGuard, is_private_host, normalize_host, parse_ip, resolve_private
 from ..util import new_id, now_iso, sha256_bytes
 from .agent import HandlerResult, JobContext, JobFailure
@@ -474,8 +475,10 @@ def verify_expected(expected: ExpectedResult | None, obs: Observation, new_tab: 
 
 
 def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[str] | None = None,
-                          max_download_bytes: int = 500 * 1024 * 1024) -> dict[str, Any]:
+                          max_download_bytes: int = 500 * 1024 * 1024,
+                          credentials: list[BrowserCredential] | None = None) -> dict[str, Any]:
     allowed_ext = {e.lower() for e in (allowed_extensions or [])}
+    credentials = credentials or []
 
     async def _common(job: WorkerJob, ctx: JobContext):
         sess = await manager.session(job.attachment_id)
@@ -571,13 +574,20 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
         a = job.arguments
         async with sess.lock:
             el, desc = await manager.resolve(page, a.get("_obs"), a["ref"], a.get("_fingerprint"))
-            if desc.get("input_type") == "password":
-                raise JobFailure(ErrorCode.POLICY_DENIED, "refusing to type into a password field")
+            text = a["text"]
+            if parse_placeholder(text) is not None:
+                # the secret is substituted here, against the live page origin, and never leaves this process
+                try:
+                    text = substitute(text, credentials, page.url)
+                except PermissionError as exc:
+                    raise JobFailure(ErrorCode.POLICY_DENIED, f"credential refused: {exc}") from exc
+            elif desc.get("input_type") == "password":
+                raise JobFailure(ErrorCode.POLICY_DENIED, "refusing to type literal text into a password field")
             try:
                 if a.get("clear", True):
-                    await el.fill(a["text"], timeout=8000)
+                    await el.fill(text, timeout=8000)
                 else:
-                    await el.type(a["text"], timeout=8000)
+                    await el.type(text, timeout=8000)
                 if a.get("submit"):
                     await el.press("Enter")
             except Exception as exc:  # noqa: BLE001

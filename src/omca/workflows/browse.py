@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from ..contracts import ExpectedResult, Observation
+from ..credentials import describe as describe_credentials
 from ..engine import ActionOutcome, WorkflowOutcome
 from ..evidence import locate_excerpt
 from ..models.registry import RouteRejected
@@ -87,6 +88,16 @@ def describe_elements(obs: Observation, limit: int = 120) -> str:
     return "\n".join(lines)
 
 
+def _login_hint(cfg) -> str:
+    if not cfg.browser.credentials:
+        return "Never type passwords; use ask_owner for a manual login."
+    return ("To sign in, type these placeholders with the type tool (the real values are filled in on the matching "
+            "site only; never invent credentials):\n" + describe_credentials(cfg.browser.credentials)
+            + "\nFor any other login, use ask_owner.")
+
+
+
+
 def coordinate_hint(cs: str) -> str:
     return {"normalized_1000": "Coordinates for click_point use a 0-1000 scale of the screenshot width and height.",
             "normalized_1": "Coordinates for click_point are fractions 0-1 of the screenshot width and height.",
@@ -138,7 +149,7 @@ async def browser_task(ctx) -> WorkflowOutcome:
             + "\n\nHistory:\n" + ("\n".join(history[-12:]) or "(none)")
             + "\n\nChoose exactly one tool call. Prefer element references; use click_point only for canvas or "
               "visual-only controls. Submissions, sends, purchases and deletions will be shown to the owner for "
-              "approval. Never type passwords; use ask_owner for a manual login."
+              "approval. " + _login_hint(cfg)
         )
         resp = await ctx.model("vision", [
             {"role": "system", "content": system_prompt(ctx, "You operate a web browser for the owner, one action at a time.")},

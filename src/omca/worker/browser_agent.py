@@ -15,8 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..config import BrowserAgentConfig
+from ..config import BrowserAgentConfig, BrowserCredential
 from ..contracts import ErrorCode, WorkerJob
+from ..secrets import resolve
 from .agent import HandlerResult, JobContext, JobFailure
 from .browser_use_runner import RESULT_PREFIX
 
@@ -46,8 +47,20 @@ def _installed(python: str) -> bool:
     return os.path.exists(python)
 
 
-def make_browser_agent_handlers(manager: Any, settings: BrowserAgentSettings) -> dict[str, Any]:
+def _sensitive_data(credentials: list[BrowserCredential]) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
+    for c in credentials:
+        for part, ref in (("username", c.username_ref), ("password", c.password_ref)):
+            value = resolve(ref)
+            if value:
+                out.setdefault(c.origin, {})[f"{c.id}_{part}"] = value
+    return out
+
+
+def make_browser_agent_handlers(manager: Any, settings: BrowserAgentSettings,
+                                credentials: list[BrowserCredential] | None = None) -> dict[str, Any]:
     cfg = settings.config
+    credentials = credentials or []
 
     async def agent_task(job: WorkerJob, ctx: JobContext) -> HandlerResult:
         att = manager.attachments.get(job.attachment_id) if job.attachment_id else None
@@ -72,6 +85,13 @@ def make_browser_agent_handlers(manager: Any, settings: BrowserAgentSettings) ->
             "channel": att.channel, "headless": att.headless, "timeout_seconds": cfg.max_minutes * 60,
             "max_text_chars": settings.max_text_chars, "downloads_path": downloads,
         }
+        sensitive = _sensitive_data(credentials)
+        if sensitive:
+            # origin -> {key: value}; the agent types <secret>key</secret> and Browser Use substitutes it on that origin only
+            req["sensitive_data"] = sensitive
+            names = ", ".join(f"<secret>{k}</secret>" for v in sensitive.values() for k in v)
+            req["task"] += ("\n\nSaved logins are available. When a login form asks for them, enter these placeholders "
+                            f"exactly (they are replaced with the real values on the matching site): {names}.")
         proc = await asyncio.create_subprocess_exec(
             cfg.python, "-I", str(RUNNER), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE)

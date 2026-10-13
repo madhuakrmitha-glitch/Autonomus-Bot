@@ -279,3 +279,42 @@ async def test_endpoint_window_pauses_and_settles(tmp_path):
     await stop_window(ledger, r, sid, ctl)
     assert calls == ["/v2/endpoint/me/qwen/resume", "/v2/endpoint/me/qwen/pause"]
     assert ledger.db.scalar("SELECT status FROM endpoint_sessions WHERE id=?", (sid,)) == "SETTLED"
+
+
+def _login_cfg(tmp_path):
+    return config_from_dict(base_config(tmp_path, None, browser={
+        "credentials": [{"id": "gh", "origin": "https://github.com", "username_ref": "env:GH_USER",
+                         "password_ref": "env:GH_PASS"}]}))
+
+
+def test_credential_placeholders_are_origin_bound(tmp_path):
+    cfg = _login_cfg(tmp_path)
+    gate = PolicyGate(Database(cfg.storage.database_path), cfg)
+    pw = el("e1", "textbox", "Password", tag="input", input_type="password", editable=True)
+    user = el("e2", "textbox", "Username", tag="input", input_type="text", editable=True)
+    on_site = "https://github.com/login"
+    ph = "{{cred:gh.password}}"
+    assert decide(gate, cfg, "browser.type", {"ref": "e1", "text": ph}, obs(pw, url=on_site)).category == C.DRAFT
+    assert decide(gate, cfg, "browser.type", {"ref": "e2", "text": "{{cred:gh.username}}"},
+                  obs(user, url=on_site)).category == C.DRAFT
+    # wrong origin, unknown id, password into a plain field and literal text into a password field all stay forbidden
+    assert decide(gate, cfg, "browser.type", {"ref": "e1", "text": ph},
+                  obs(pw, url="https://evil.example/login")).category == C.FORBIDDEN
+    assert decide(gate, cfg, "browser.type", {"ref": "e1", "text": "{{cred:nope.password}}"},
+                  obs(pw, url=on_site)).category == C.FORBIDDEN
+    assert decide(gate, cfg, "browser.type", {"ref": "e2", "text": ph}, obs(user, url=on_site)).category == C.FORBIDDEN
+    assert decide(gate, cfg, "browser.type", {"ref": "e1", "text": "hunter2"}, obs(pw, url=on_site)).category == C.FORBIDDEN
+
+
+def test_placeholder_substitution(tmp_path, monkeypatch):
+    from omca.credentials import substitute
+
+    cfg = _login_cfg(tmp_path)
+    monkeypatch.setenv("GH_PASS", "s3cret!")
+    assert substitute("{{cred:gh.password}}", cfg.browser.credentials, "https://github.com/login") == "s3cret!"
+    assert substitute("plain text", cfg.browser.credentials, "https://evil.example") == "plain text"
+    with pytest.raises(PermissionError):
+        substitute("{{cred:gh.password}}", cfg.browser.credentials, "https://evil.example/")
+    monkeypatch.delenv("GH_USER", raising=False)
+    with pytest.raises(PermissionError):
+        substitute("{{cred:gh.username}}", cfg.browser.credentials, "https://github.com/")
