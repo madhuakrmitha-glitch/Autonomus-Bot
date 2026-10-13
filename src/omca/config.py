@@ -134,7 +134,7 @@ class BudgetConfig(_Base):
 
 
 class LimitsConfig(_Base):
-    max_actions_per_task: int = 40
+    max_actions_per_task: int | None = Field(default=None, ge=1, description="null: no action-count cap")
     max_retries_per_action: int = 2
     max_task_active_minutes: float = 20
     approval_expiry_minutes: float = 15

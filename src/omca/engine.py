@@ -492,7 +492,7 @@ class TaskContext:
         action_id, operation, idem = intent.action_id, intent.operation, intent.idempotency_key
         count = self.c.tasks.add_action_count(self.task.id)
         max_actions = self.task.request.budget.max_actions or self.config.limits.max_actions_per_task
-        if count > max_actions:
+        if max_actions is not None and count > max_actions:
             self._set_action(action_id, status=ActionStatus.CANCELLED)
             raise TaskLimitExceeded(f"task reached its limit of {max_actions} executed actions")
 

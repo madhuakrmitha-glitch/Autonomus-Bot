@@ -107,7 +107,7 @@ async def browser_task(ctx) -> WorkflowOutcome:
     start = req.params.get("url") or (URL.search(ctx.task.goal).group(0) if URL.search(ctx.task.goal) else None)
     if cfg.browser.engine == "browser_use":
         return await browser_use_task(ctx, att, start)
-    max_steps = min(int(req.params.get("max_steps", 25)), cfg.limits.max_actions_per_task)
+    max_steps = int(req.params["max_steps"]) if req.params.get("max_steps") else None  # None: no step cap
 
     if start:
         first = await ctx.act("browser.navigate", {"url": start}, key="nav:0", attachment_id=att.id)
@@ -122,7 +122,9 @@ async def browser_task(ctx) -> WorkflowOutcome:
     finished: dict[str, Any] | None = None
     malformed = 0
 
-    for step in range(1, max_steps + 1):
+    step = 0
+    while max_steps is None or step < max_steps:
+        step += 1
         obs = await _fresh(ctx, obs, step, att.id)
         if obs is None:
             return WorkflowOutcome("FAILED", "The browser session produced no observation.", error_code="WORKER_UNAVAILABLE")
@@ -219,7 +221,7 @@ async def browser_task(ctx) -> WorkflowOutcome:
             obs = None
 
     # verify the end state from a fresh observation, not from the model's claim
-    final_obs = await _fresh(ctx, None, max_steps + 1, att.id)
+    final_obs = await _fresh(ctx, None, step + 1, att.id)
     verdict = {"achieved": False, "evidence": "not checked"}
     if final_obs is not None:
         shot = c.artifacts.read_bytes(final_obs.screenshot_artifact_id) if final_obs.screenshot_artifact_id else None
