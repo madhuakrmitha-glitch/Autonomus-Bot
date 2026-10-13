@@ -214,6 +214,11 @@ def element_from_desc(ref: str, desc: dict[str, Any]) -> ElementRef:
     )
 
 
+def _browser_closed(exc: BaseException) -> bool:
+    """Playwright's error for a page, context or browser that no longer exists."""
+    return type(exc).__name__ == "TargetClosedError" or "has been closed" in str(exc)
+
+
 @dataclass
 class BrowserSession:
     attachment: BrowserAttachment
@@ -307,8 +312,29 @@ class BrowserManager:
             raise JobFailure(ErrorCode.WORKER_UNAVAILABLE, f"cannot attach to browser {att.id}: {exc}") from exc
         sess = BrowserSession(att, new_id("bss"), context, browser)
         context.on("page", lambda p: sess.new_pages.append(p))
+        # a browser closed under us (window closed, crash) is forgotten, so the next job opens a fresh one
+        context.on("close", lambda *_: self._forget(sess))
+        if browser is not None:
+            browser.on("disconnected", lambda *_: self._forget(sess))
         self._sessions[att.id] = sess
         return sess
+
+    def _forget(self, sess: BrowserSession) -> None:
+        if self._sessions.get(sess.attachment.id) is sess:
+            del self._sessions[sess.attachment.id]
+
+    async def task_page(self, attachment_id: str | None, task_id: str) -> tuple[BrowserSession, Any]:
+        """The session and the task's page; a browser found closed is reopened once instead of failing the job."""
+        sess = await self.session(attachment_id)
+        try:
+            return sess, await self.page(sess, task_id)
+        except Exception as exc:  # noqa: BLE001
+            if not _browser_closed(exc):
+                raise
+        if self._sessions.get(sess.attachment.id) is sess:
+            await self.release_session(sess.attachment.id)  # tidy up whatever is left of it
+        sess = await self.session(attachment_id)
+        return sess, await self.page(sess, task_id)
 
     async def release_session(self, attachment_id: str) -> None:
         """Close this worker's browser for an attachment so another program can open its profile."""
@@ -364,7 +390,7 @@ class BrowserManager:
             raise JobFailure(ErrorCode.POLICY_DENIED, f"the page went to a private network address ({where[:120]})")
 
     async def close(self) -> None:
-        for s in self._sessions.values():
+        for s in list(self._sessions.values()):  # closing one fires _forget, which edits the dict
             try:
                 if s.attachment.mode == "cdp":
                     for p in s.pages.values():
@@ -481,9 +507,7 @@ def make_browser_handlers(manager: BrowserManager, *, allowed_extensions: list[s
     credentials = credentials or []
 
     async def _common(job: WorkerJob, ctx: JobContext):
-        sess = await manager.session(job.attachment_id)
-        page = await manager.page(sess, job.task_id)
-        return sess, page
+        return await manager.task_page(job.attachment_id, job.task_id)
 
     async def _after(sess, page, job: WorkerJob, ctx: JobContext, result: dict[str, Any], download: str | None = None,
                      extra_artifacts: list[str] | None = None) -> HandlerResult:

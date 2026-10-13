@@ -49,6 +49,31 @@ async def test_authorized_session_reused_and_unrelated_profile_untouched(make_sy
     assert t.status == TaskStatus.FAILED and t.error_code == "AUTH_REQUIRED"
 
 
+async def test_a_browser_closed_under_the_worker_is_reopened(make_system, site, brain):
+    s = await make_system()
+    brain.verify_markers = ["New session started", "Signed in as owner-42"]
+
+    async def check_session() -> None:
+        brain.browser_script = [{"name": "finish", "arguments": {"success": True, "summary": "checked session"}}]
+        t = await s.wait(browse(s, "Open the session page", site.url("/session.html")).id, timeout=60)
+        assert t.status == TaskStatus.COMPLETED, (t.result, s.coord.tasks.events(t.id)[-6:])
+
+    await check_session()
+    manager = s.worker.browser
+    # the owner closes the browser window: the session is dropped and the next task opens a new browser
+    dead = manager._sessions["vm1-test"]
+    await dead.browser.close()
+    await asyncio.sleep(0.2)
+    assert "vm1-test" not in manager._sessions
+    await check_session()
+    # a browser that died without telling us is found closed when used, and reopened instead of failing
+    await manager._sessions["vm1-test"].browser.close()
+    manager._sessions["vm1-test"] = dead
+    await check_session()
+    assert manager._sessions["vm1-test"] is not dead
+    assert not s.coord.db.query("SELECT 1 FROM actions WHERE status IN ('UNKNOWN','FAILED') AND operation LIKE 'browser.%'")
+
+
 @pytest.mark.acceptance("AT05")
 async def test_structured_navigation_with_waits_and_fresh_refs(make_system, site, brain):
     s = await make_system()
