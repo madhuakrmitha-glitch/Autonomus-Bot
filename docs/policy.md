@@ -41,6 +41,32 @@ drafted.
 While waiting for a decision the task releases the VM's UI lease (other tasks may use the desktop); the
 revalidation step is what makes that safe.
 
+## Hands-off browsing and saved logins
+
+Two opt-in settings remove the prompts for browser work:
+
+```yaml
+policy:
+  auto_approve_browser: true      # consequential / unknown-effect browser.* actions run without approval
+browser:
+  credentials:
+    - {id: github, origin: https://github.com, username_ref: "keyring:omca/github-user", password_ref: "keyring:omca/github-pass"}
+```
+
+* `auto_approve_browser` only turns `REQUIRE_APPROVAL` into `ALLOW` for `browser.*` operations. `FORBIDDEN`
+  verdicts (private hosts, `javascript:` URLs, unknown operations, credential export) still deny, and email,
+  messages, file deletes and permission changes still ask.
+* The model never receives a password. It types `{{cred:ID.password}}`; the gate allows that only into a
+  password field on the credential's exact origin, and the worker substitutes the secret from its own secret
+  store against the live page origin. Placeholders, not values, are what the journal and approvals record.
+  Literal text typed into a credential field is still `FORBIDDEN`.
+* With the Browser Use engine the same credentials are handed to the agent as `sensitive_data` keyed by
+  origin (`<secret>ID_username</secret>`, `<secret>ID_password</secret>`), and `browser.agent.require_approval:
+  false` removes the per-run prompt.
+* Trade-off: with auto-approval a prompt-injected page can make the agent click or submit on any site,
+  and a saved login is usable by the agent on its own origin. Use a dedicated browser profile and accounts
+  with limited rights.
+
 ## Standing rules
 
 Narrow pre-authorisations for repeated, low-risk mutations, e.g. dismissing one site's cookie banner:

@@ -88,14 +88,18 @@ def describe_elements(obs: Observation, limit: int = 120) -> str:
     return "\n".join(lines)
 
 
+def _approval_hint(cfg) -> str:
+    if cfg.policy.auto_approve_browser:
+        return "Browser actions run without asking the owner, so double-check anything irreversible. "
+    return "Submissions, sends, purchases and deletions will be shown to the owner for approval. "
+
+
 def _login_hint(cfg) -> str:
     if not cfg.browser.credentials:
         return "Never type passwords; use ask_owner for a manual login."
     return ("To sign in, type these placeholders with the type tool (the real values are filled in on the matching "
             "site only; never invent credentials):\n" + describe_credentials(cfg.browser.credentials)
             + "\nFor any other login, use ask_owner.")
-
-
 
 
 def coordinate_hint(cs: str) -> str:
@@ -148,8 +152,7 @@ async def browser_task(ctx) -> WorkflowOutcome:
             + untrusted(obs.url, obs.text, 6000)
             + "\n\nHistory:\n" + ("\n".join(history[-12:]) or "(none)")
             + "\n\nChoose exactly one tool call. Prefer element references; use click_point only for canvas or "
-              "visual-only controls. Submissions, sends, purchases and deletions will be shown to the owner for "
-              "approval. " + _login_hint(cfg)
+              "visual-only controls. " + _approval_hint(cfg) + _login_hint(cfg)
         )
         resp = await ctx.model("vision", [
             {"role": "system", "content": system_prompt(ctx, "You operate a web browser for the owner, one action at a time.")},

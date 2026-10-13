@@ -48,6 +48,7 @@ class PolicyGate:
             "standing_rules": [r.model_dump(mode="json") for r in config.policy.standing_rules],
             "contacts": [c.model_dump() for c in config.policy.contacts],
             "extra_terms": config.policy.extra_consequential_terms,
+            "auto_approve_browser": config.policy.auto_approve_browser,
             "credentials": [[c.id, c.origin] for c in config.browser.credentials],
             "approval_expiry_minutes": config.limits.approval_expiry_minutes,
         }
@@ -97,6 +98,10 @@ class PolicyGate:
         if cls.category in ALLOW_CATEGORIES:
             return self._decision(PolicyVerdict.ALLOW, cls.category, cls.reason, destination=cls.destination,
                                   consequence=cls.consequence), cls
+        if self.config.policy.auto_approve_browser and intent.operation.startswith("browser."):
+            return self._decision(PolicyVerdict.ALLOW, cls.category,
+                                  f"{cls.reason}; auto-approved (policy.auto_approve_browser)",
+                                  destination=cls.destination, consequence=cls.consequence), cls
         rule = self.matching_rule(intent, cls, ctx)
         if rule is not None:
             return self._decision(PolicyVerdict.ALLOW, cls.category, f"{cls.reason}; allowed by standing rule {rule.id}",

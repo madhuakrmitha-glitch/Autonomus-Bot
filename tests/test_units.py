@@ -281,8 +281,8 @@ async def test_endpoint_window_pauses_and_settles(tmp_path):
     assert ledger.db.scalar("SELECT status FROM endpoint_sessions WHERE id=?", (sid,)) == "SETTLED"
 
 
-def _login_cfg(tmp_path):
-    return config_from_dict(base_config(tmp_path, None, browser={
+def _login_cfg(tmp_path, auto=False):
+    return config_from_dict(base_config(tmp_path, None, policy={"auto_approve_browser": auto}, browser={
         "credentials": [{"id": "gh", "origin": "https://github.com", "username_ref": "env:GH_USER",
                          "password_ref": "env:GH_PASS"}]}))
 
@@ -304,6 +304,19 @@ def test_credential_placeholders_are_origin_bound(tmp_path):
                   obs(pw, url=on_site)).category == C.FORBIDDEN
     assert decide(gate, cfg, "browser.type", {"ref": "e2", "text": ph}, obs(user, url=on_site)).category == C.FORBIDDEN
     assert decide(gate, cfg, "browser.type", {"ref": "e1", "text": "hunter2"}, obs(pw, url=on_site)).category == C.FORBIDDEN
+
+
+def test_auto_approve_browser_only_covers_browser_actions(tmp_path):
+    cfg = _login_cfg(tmp_path, auto=True)
+    gate = PolicyGate(Database(cfg.storage.database_path), cfg)
+    submit = el(role="button", name="Place order", in_form=True, input_type="submit")
+    d = decide(gate, cfg, "browser.click", {"ref": "e1"}, obs(submit))
+    assert d.category == C.CONSEQUENTIAL and d.verdict.value == "ALLOW"
+    # forbidden stays forbidden, and non-browser consequential actions still need the owner
+    assert decide(gate, cfg, "browser.navigate", {"url": "javascript:alert(1)"}).verdict.value == "DENY"
+    assert decide(gate, cfg, "email.send", {"draft_artifact_id": "x", "to": ["a@example.com"]}).verdict.value in {
+        "DENY", "REQUIRE_APPROVAL"}
+    assert decide(gate, cfg, "file.delete", {"rel_path": "a.txt"}).verdict.value == "REQUIRE_APPROVAL"
 
 
 def test_placeholder_substitution(tmp_path, monkeypatch):

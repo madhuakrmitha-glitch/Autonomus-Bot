@@ -226,6 +226,7 @@ workers:
   # - {id: vm2, credential_ref: keyring:omca/worker-vm2, capabilities: [browser, spreadsheet], enabled: true}
 
 policy:
+  auto_approve_browser: false      # true: browser.* actions never wait for approval (forbidden ones stay denied)
   contacts: []                     # recipients sends/invites may target, e.g. {name: Asha, kind: email, address: asha@example.com}
   standing_rules: []               # narrow pre-authorizations; each needs an origin, recipient, path or element pattern
   # - id: docs-cookie-banner

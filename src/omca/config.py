@@ -453,6 +453,10 @@ class Contact(_Base):
 
 
 class PolicyConfig(_Base):
+    auto_approve_browser: bool = Field(
+        default=False, description="Run consequential and unknown-effect browser.* actions without asking the owner. "
+                                   "Forbidden actions (private hosts, javascript: URLs, unexpected recipients, "
+                                   "literal credential typing) stay denied; email, files and messages still ask.")
     standing_rules: list[StandingRule] = Field(default_factory=list)
     contacts: list[Contact] = Field(default_factory=list)
     download_allowed_extensions: list[str] = Field(
@@ -592,13 +596,13 @@ class WorkerProcessConfig(_Base):
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"
     smtp: SmtpConfig | None = None
+    browser_credentials: list[BrowserCredential] = Field(
+        default_factory=list, description="Logins the worker may type into matching origins (same entries as "
+                                          "browser.credentials on the coordinator)")
     allowed_download_extensions: list[str] = Field(default_factory=lambda: PolicyConfig().download_allowed_extensions)
     browser_agent: BrowserAgentConfig | None = Field(
         default=None, description="Browser Use agent (needs gateway_url and gateway_token_ref on standalone workers)")
 
-    browser_credentials: list[BrowserCredential] = Field(
-        default_factory=list, description="Logins the worker may type into matching origins (same entries as "
-                                          "browser.credentials on the coordinator)")
     @field_validator("credential_ref")
     @classmethod
     def _ref(cls, v: str) -> str:
