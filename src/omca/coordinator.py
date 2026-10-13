@@ -65,7 +65,7 @@ def classify_workflow(goal: str) -> str:
         return "desktop_workflow"
     if BROWSE_HINT.search(goal.strip()):
         return "browser_task"
-    return "research_report"
+    return "chat_workflow"
 
 
 class Coordinator:

@@ -116,7 +116,7 @@ class ReceiptStatus(StrEnum):
 # ---------------------------------------------------------------------------
 
 
-WorkflowName = Literal["research_report", "video_analysis", "browser_task", "desktop_workflow", "auto"]
+WorkflowName = Literal["research_report", "video_analysis", "browser_task", "desktop_workflow", "chat_workflow", "auto"]
 
 
 class TaskBudget(_C):

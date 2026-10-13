@@ -152,7 +152,7 @@
   const WORKING = new Set(["QUEUED", "RUNNING", "VERIFYING"]);
   const WORKFLOWS = {
     research_report: ["Research", "book"], video_analysis: ["Video", "video"], browser_task: ["Browse", "globe"],
-    desktop_workflow: ["Office", "briefcase"],
+    desktop_workflow: ["Office", "briefcase"], chat_workflow: ["Chat", "message-square"],
   };
   const wf = (w) => WORKFLOWS[w] || ["Task", "sparkles"];
   const pill = (status) => { const [label, cls] = STATUS[status] || [status, ""]; return h("span", { class: `pill ${cls}` }, label); };
