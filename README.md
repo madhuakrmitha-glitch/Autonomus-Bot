@@ -83,6 +83,10 @@ commands, free-text tasks, approval buttons and report downloads as Telegram, pl
 pause/resume/cancel and the month's budget. `uv run omca ui` opens it signed in (the owner API token is
 passed in the URL fragment and kept in the browser's local storage). Every owner message is mirrored to the
 UI; when Telegram is not configured the UI is the delivery channel, and when it is, both receive messages.
+While a task runs, the chat shows a live activity trace (like a coding agent's): which model is thinking and for
+how long, the reasoning it returned, the action it chose (`Click button "Show details"`), policy decisions and waits for
+you. It collapses to "Worked for 19s · 12 steps" when the task ends and can be reopened later; click any model or action
+row for the full reasoning, arguments and token counts. The trace is built from task events served by `GET /ui/api/activity`.
 
 ## Browser engines
 

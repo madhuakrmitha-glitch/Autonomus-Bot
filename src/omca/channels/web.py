@@ -14,6 +14,11 @@ from typing import Any
 from ..db import Database, dumps, loads
 from ..util import now_iso
 
+# Task events worth showing as live activity (the rest, such as stale receipts, are audit detail).
+ACTIVITY_KINDS = ("progress", "model_start", "model_done", "model_error", "action_intent", "policy", "action_receipt",
+                  "limitation", "reconciled", "status", "owner_steer", "owner_owner_input")
+ACTIVITY_LIMIT = 600
+
 
 class WebInbox:
     def __init__(self, db: Database):
@@ -95,3 +100,27 @@ class WebInbox:
             return None
         payload = loads(r["payload_json"], {})
         return payload["filename"], base64.b64decode(payload["data_b64"])
+
+    # -- live activity -----------------------------------------------------------------------------
+    def last_event_id(self) -> int:
+        return int(self.db.scalar("SELECT COALESCE(MAX(id), 0) FROM task_events"))
+
+    def activity(self, after: int = 0, *, task_id: str | None = None, conversation: str | None = None,
+                 limit: int = ACTIVITY_LIMIT) -> list[dict[str, Any]]:
+        """Task events in id order. With a task or chat filter and no cursor, the most recent ``limit`` events."""
+        marks = ",".join("?" * len(ACTIVITY_KINDS))
+        where, params = [f"e.kind IN ({marks})", "e.task_id IS NOT NULL", "e.id > ?"], [*ACTIVITY_KINDS, after]
+        if task_id:
+            where.append("e.task_id = ?")
+            params.append(task_id)
+        if conversation:
+            where.append("(t.conversation_id = ? OR t.id = ?)")
+            params += [conversation, conversation]
+        sql = ("SELECT e.id, e.task_id, t.conversation_id, e.ts, e.kind, e.data_json FROM task_events e "
+               "JOIN tasks t ON t.id = e.task_id WHERE " + " AND ".join(where))
+        if after <= 0 and (task_id or conversation):
+            rows = list(reversed(self.db.query(sql + " ORDER BY e.id DESC LIMIT ?", (*params, limit))))
+        else:
+            rows = self.db.query(sql + " ORDER BY e.id LIMIT ?", (*params, limit))
+        return [{"id": r["id"], "task_id": r["task_id"], "conversation_id": r["conversation_id"], "ts": r["ts"],
+                 "kind": r["kind"], "data": loads(r["data_json"], {})} for r in rows]

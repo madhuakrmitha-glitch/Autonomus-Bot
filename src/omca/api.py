@@ -323,6 +323,24 @@ def create_app(coord: Coordinator, iface: Any | None = None) -> FastAPI:
                     return {"messages": items, "rev": items[-1]["rev"] if items else after}
                 await asyncio.sleep(0.4)
 
+        @app.get("/ui/api/activity", tags=["ui"], summary="What the assistant is doing: task events since an id (long poll)")
+        async def ui_activity(after: int = 0, wait: float = 0, task_id: str | None = None, conversation: str | None = None,
+                              ident: Identity = Depends(owner)) -> dict[str, Any]:
+            """``after=-1`` only reports the newest event id, so a client can follow live activity from now on."""
+            if after < 0:
+                return {"events": [], "last_id": inbox.last_event_id()}
+            if task_id:
+                found = coord.tasks.get(task_id) or coord.tasks.by_short_id(task_id)
+                if found is None:
+                    raise HTTPException(404, "unknown task")
+                task_id = found.id
+            deadline = asyncio.get_running_loop().time() + max(0.0, min(wait, 25.0))
+            while True:
+                events = inbox.activity(after, task_id=task_id, conversation=conversation)
+                if events or asyncio.get_running_loop().time() >= deadline:
+                    return {"events": events, "last_id": events[-1]["id"] if events else after}
+                await asyncio.sleep(0.4)
+
         @app.get("/ui/api/info", tags=["ui"], summary="Assistant configuration summary for the web UI")
         def ui_info(ident: Identity = Depends(owner)) -> dict[str, Any]:
             roles = {}

@@ -193,3 +193,51 @@ def test_chat_workflow_only_sees_its_own_conversation(web):
     assert newest.goal == "second in a"
     turns = _turns(coord, newest)
     assert [t["content"] for t in turns] == ["first in a"]  # queued tasks have no answer yet; chat b is never mixed in
+
+
+async def test_activity_feed_shows_what_the_assistant_is_doing(make_system):
+    import httpx
+
+    from omca.contracts import TaskRequest
+
+    os.environ["OMCA_T_UI_OWNER"] = "ui-owner-tok"
+    s = await make_system(worker=False, ui={"enabled": True}, server={"owner_api_token_ref": "env:OMCA_T_UI_OWNER"})
+    transport = httpx.ASGITransport(app=create_app(s.coord))
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+        assert (await client.get("/ui/api/activity")).status_code == 401
+        cursor = (await client.get("/ui/api/activity?after=-1", headers=OWNER)).json()
+        assert cursor["events"] == []
+
+        t = s.coord.submit_task(TaskRequest(goal="say hello", workflow="chat_workflow", conversation_id="cnv_aaaaaaaaaaaa"))
+        await s.wait(t.id)
+
+        live = (await client.get(f"/ui/api/activity?after={cursor['last_id']}", headers=OWNER)).json()
+        kinds = [e["kind"] for e in live["events"]]
+        assert {"progress", "model_start", "model_done", "action_intent", "action_receipt", "status"} <= set(kinds)
+        assert kinds.index("model_start") < kinds.index("model_done")
+        done = next(e for e in live["events"] if e["kind"] == "model_done")
+        assert done["task_id"] == t.id and done["data"]["role"] == "planning" and done["data"]["text"]
+        assert next(e for e in live["events"] if e["kind"] == "action_intent")["data"]["arguments"]["text"]
+        assert live["last_id"] == live["events"][-1]["id"]
+
+        # a chat or a task can be loaded whole; a later cursor sees nothing new
+        by_chat = (await client.get("/ui/api/activity?conversation=cnv_aaaaaaaaaaaa", headers=OWNER)).json()
+        by_task = (await client.get(f"/ui/api/activity?task_id={t.id[-6:]}", headers=OWNER)).json()
+        assert [e["id"] for e in by_chat["events"]] == [e["id"] for e in by_task["events"]] == [e["id"] for e in live["events"]]
+        assert (await client.get("/ui/api/activity?conversation=cnv_bbbbbbbbbbbb", headers=OWNER)).json()["events"] == []
+        assert (await client.get(f"/ui/api/activity?after={live['last_id']}", headers=OWNER)).json()["events"] == []
+        assert (await client.get("/ui/api/activity?task_id=nope", headers=OWNER)).status_code == 404
+
+
+async def test_model_reasoning_is_part_of_the_activity(make_system):
+    from omca.contracts import TaskRequest
+    from omca.models import register_fixture
+    from omca.models.providers import fixture_reply
+
+    s = await make_system(worker=False, ui={"enabled": True})
+    register_fixture("brain", lambda route, body: fixture_reply("<think>The user greets me, so I greet back.</think>Hello there!"))
+    t = s.coord.submit_task(TaskRequest(goal="hi", workflow="chat_workflow"))
+    await s.wait(t.id)
+    [done] = [e for e in s.coord.web_inbox.activity(task_id=t.id) if e["kind"] == "model_done"]
+    assert done["data"]["thought"] == "The user greets me, so I greet back."
+    assert done["data"]["text"] == "Hello there!"  # the reasoning is shown separately from the reply

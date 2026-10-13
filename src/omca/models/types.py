@@ -96,6 +96,11 @@ def strip_thinking(text: str) -> str:
     return _THINK.sub("", text or "").strip()
 
 
+def thinking_of(text: str) -> str:
+    """The contents of any <think> blocks in a model answer (what the model reasoned before replying)."""
+    return "\n\n".join(m.strip() for m in re.findall(r"<think>(.*?)</think>", text or "", re.S) if m.strip())
+
+
 def extract_json(text: str) -> Any:
     text = strip_thinking(text)
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)

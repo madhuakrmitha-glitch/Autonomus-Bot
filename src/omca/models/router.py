@@ -34,6 +34,7 @@ from .types import (
     count_images,
     image_part,
     strip_thinking,
+    thinking_of,
 )
 
 
@@ -257,5 +258,5 @@ class ModelRouter:
         return ModelResponse(
             route_id=route.id, model=route.model, text=strip_thinking(content), tool_calls=calls,
             finish_reason=choice.get("finish_reason"), usage=raw.get("usage"), call_id=call_id, latency_ms=latency,
-            image_transforms=transforms, reasoning=msg.get("reasoning_content") or msg.get("reasoning"), raw=None,
+            image_transforms=transforms, reasoning=msg.get("reasoning_content") or msg.get("reasoning") or thinking_of(content) or None, raw=None,
         )

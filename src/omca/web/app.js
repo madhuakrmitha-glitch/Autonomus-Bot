@@ -42,6 +42,7 @@
     alert: ["M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z", "M12 9v4M12 17h.01"],
     calendar: [{ r: [3, 4, 18, 18, 2] }, "M16 2v4M8 2v4M3 10h18"],
     help: [{ c: [12, 12, 10] }, "M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"],
+    chevron: ["m9 18 6-6-6-6"],
     "message-square": ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
   };
   const SVGNS = "http://www.w3.org/2000/svg";
@@ -187,6 +188,9 @@
     detail: null, filter: "all", query: "", mode: 0, files: [], replyTo: null, info: null, budget: null,
     approvals: new Map(), blobs: new Map(), unread: 0, notify: store.get("omca.notify") === "1",
     inspectorOpen: store.get("omca.inspector") !== "0", connected: false, firstLoad: true, sending: false,
+    // live activity: task events by task, which traces / steps the owner opened by hand, and the server clock offset
+    events: new Map(), evSeen: new Set(), actCursor: null, actLoaded: new Set(), traceOpen: new Map(), traceAll: new Set(),
+    itemOpen: new Set(), traceEls: new Map(), skew: 0,
   };
   (function readToken() {
     const t = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -197,6 +201,8 @@
   class AuthError extends Error {}
   async function api(path, opts = {}) {
     const res = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${S.token}` } });
+    const serverDate = Date.parse(res.headers.get("Date") || "");
+    if (serverDate) S.skew = Math.abs(serverDate - Date.now()) > 3000 ? serverDate - Date.now() : 0;
     if (res.status === 401) { showLogin(true); throw new AuthError("unauthorized"); }
     if (!res.ok) {
       let detail = res.statusText;
@@ -432,17 +438,297 @@
     return hr < 5 ? "Working late?" : hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   }
 
-  function workingRow() {
-    const working = convTasks().filter((x) => WORKING.has(x.status));
-    const t = working[0];
-    if (!t) return null;
-    const more = working.length > 1 ? ` (+${working.length - 1} more)` : "";
-    const label = t.workflow === "chat_workflow" ? `Thinking…${more}`
-      : `${STATUS[t.status][0]}${t.phase ? " · " + t.phase : ""} — ${t.goal.slice(0, 70)}${t.goal.length > 70 ? "…" : ""}${more}`;
-    return h("div", { class: "msg assistant", id: "workingRow" }, h("div", { class: "avatar logo" }),
-      h("div", { class: "bubble" }, h("div", { class: "card status compact" }, h("div", { class: "working" },
-        h("span", { class: "typing" }, h("span"), h("span"), h("span")), h("span", {}, label)))));
+  // ---------------------------------------------------------------------------------------- live activity
+  // The server records what each task does (model calls, the actions they choose, policy decisions, waits). The UI folds
+  // those events into a trace like a coding agent's: what the model is thinking, which step it takes, how it went.
+  // Everything shown comes from model or page content, so it is only ever rendered as text, never as HTML.
+  const ROLES = { planning: "Planning model", vision: "Vision model", review: "Review model", summarisation: "Summary model" };
+  const roleLabel = (r) => ROLES[r] || `${r || "Model"} model`;
+  const OPS = {
+    "browser.navigate": "Open page", "browser.observe": "Read page", "browser.click": "Click", "browser.click_point": "Click",
+    "browser.type": "Type", "browser.press": "Press key", "browser.select": "Choose option", "browser.scroll": "Scroll",
+    "browser.back": "Go back", "browser.wait": "Wait", "browser.agent_task": "Browser Use agent",
+    "telegram.send_owner": "Send reply", "file.write": "Save file", "email.send": "Send email",
+  };
+  const HIDDEN_OPS = new Set(["browser.hit_test"]);
+  const opLabel = (op) => OPS[op] || String(op || "action").replace(/[._]/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const quote = (s) => `“${s}”`;
+  function fmtArgs(a) { return Object.entries(a || {}).map(([k, v]) => `${k}=${typeof v === "string" ? JSON.stringify(v) : v}`).join(", "); }
+  function opDetail(it) {
+    const a = it.args || {};
+    if (it.target) return it.target;
+    switch (it.op) {
+      case "browser.navigate": return a.url || "";
+      case "browser.click": return a.ref ? `element ${a.ref}` : "";
+      case "browser.click_point": return `at (${a.x}, ${a.y})`;
+      case "browser.type": return `${a.ref ? a.ref + ": " : ""}${a.text != null ? quote(a.text) : ""}${a.submit ? " and submit" : ""}`;
+      case "browser.press": return a.key || "";
+      case "browser.select": return `${a.ref || ""}${a.value ? " → " + a.value : ""}`;
+      case "browser.scroll": return a.dy < 0 ? "up" : "down";
+      case "browser.wait": return a.text ? `for ${quote(a.text)}` : a.ms ? `${a.ms} ms` : "";
+      case "browser.agent_task": return a.goal || "";
+      case "telegram.send_owner": return a.text || "";
+      default: return fmtArgs(a);
+    }
   }
+  const oneLine = (s, n = 140) => { const t = String(s || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+  const nowMs = () => Date.now() + S.skew;
+  function fmtDur(ms) {
+    if (!(ms >= 0)) return "";
+    const s = ms / 1000;
+    if (s < 10) return `${s.toFixed(1)}s`;
+    if (s < 60) return `${Math.round(s)}s`;
+    return `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, "0")}s`;
+  }
+  const FINAL = new Set(["COMPLETED", "PARTIAL", "FAILED", "CANCELLED"]);
+  const STATUS_LINE = {
+    AWAITING_APPROVAL: "Waiting for your approval", AWAITING_USER: "Waiting for your answer", PAUSED: "Paused", BLOCKED: "Blocked",
+    VERIFYING: "Checking the result", COMPLETED: "Finished", PARTIAL: "Finished with limitations", FAILED: "Failed", CANCELLED: "Cancelled",
+  };
+
+  function addEvents(events) {
+    let touched = false;
+    for (const e of events) {
+      if (S.evSeen.has(e.id)) continue;
+      S.evSeen.add(e.id);
+      let list = S.events.get(e.task_id); if (!list) S.events.set(e.task_id, (list = []));
+      const inOrder = !list.length || list[list.length - 1].id < e.id;
+      list.push(e); if (!inOrder) list.sort((a, b) => a.id - b.id);
+      if (list.length > 800) list.splice(0, list.length - 800);
+      touched = true;
+    }
+    return touched;
+  }
+
+  // Fold a task's events into display items; pairs start/finish events and tracks the last known status.
+  const foldCache = new Map();
+  function fold(taskId) {
+    const events = S.events.get(taskId) || [];
+    const last = events.length ? events[events.length - 1].id : 0;
+    const hit = foldCache.get(taskId);
+    if (hit && hit.last === last && hit.n === events.length) return hit;
+    const items = []; const open = new Map(); let status = null, first = null;
+    // an action still pending when the next step begins ended without a receipt (denied or never run)
+    const settle = () => { for (const it of items) if (it.type === "action") { if (it.state === "running") it.state = "ended"; else if (it.state === "approval") it.state = "denied"; } };
+    for (const e of events) {
+      const d = e.data || {}; first = first || e.ts;
+      switch (e.kind) {
+        case "progress": items.push({ id: e.id, ts: e.ts, type: "note", text: d.text, phase: d.phase }); break;
+        case "model_start": {
+          const prev = open.get("m:" + d.key); if (prev && prev.state === "running") prev.state = "stopped";
+          settle();
+          const it = { id: e.id, ts: e.ts, type: "model", key: d.key, role: d.role, images: d.images, state: "running" };
+          open.set("m:" + d.key, it); items.push(it); break;
+        }
+        case "model_done": case "model_error": {
+          let it = open.get("m:" + d.key);
+          if (!it) { it = { id: e.id, ts: e.ts, type: "model", key: d.key, role: d.role }; items.push(it); }
+          it.endTs = e.ts;
+          if (e.kind === "model_error") { it.state = "failed"; it.error = d.error; break; }
+          Object.assign(it, { state: "done", model: d.model, ms: d.latency_ms, tokensIn: d.tokens_in, tokensOut: d.tokens_out,
+            thought: d.thought, text: d.text, toolCalls: d.tool_calls || [] });
+          break;
+        }
+        case "action_intent": {
+          settle();
+          const it = { id: e.id, ts: e.ts, type: "action", actionId: d.action_id, op: d.operation, args: d.arguments, target: d.target,
+            rationale: d.rationale, state: "running", hidden: HIDDEN_OPS.has(d.operation) };
+          open.set("a:" + d.action_id, it); items.push(it); break;
+        }
+        case "policy": {
+          const it = open.get("a:" + d.action_id); if (!it) break;
+          it.policy = d;
+          if (d.verdict === "DENY") { it.state = "denied"; it.error = d.reason; } else if (d.verdict === "REQUIRE_APPROVAL") it.state = "approval";
+          break;
+        }
+        case "action_receipt": {
+          const it = open.get("a:" + d.action_id); if (!it) break;
+          it.endTs = e.ts;
+          it.state = d.status === "SUCCEEDED" ? "done" : d.status === "UNKNOWN" ? "unknown" : "failed";
+          if (d.error) it.error = d.error.message || d.error.code;
+          break;
+        }
+        case "limitation": items.push({ id: e.id, ts: e.ts, type: "note", warn: true, text: `Limitation: ${d.text}` }); break;
+        case "reconciled": items.push({ id: e.id, ts: e.ts, type: "note", text: `Recovered an earlier action (${d.via})` }); break;
+        case "owner_steer": items.push({ id: e.id, ts: e.ts, type: "you", text: `You steered: ${d.text}` }); break;
+        case "owner_owner_input": items.push({ id: e.id, ts: e.ts, type: "you", text: `You answered: ${d.text}` }); break;
+        case "status": {
+          status = d.to;
+          if (d.from === "QUEUED" && d.to === "RUNNING") break;
+          if (d.to === "RUNNING") { items.push({ id: e.id, ts: e.ts, type: "status", text: "Resumed" }); break; }
+          const reason = d.reason || (d.error_code && FINAL.has(d.to) ? d.error_code : "");
+          items.push({ id: e.id, ts: e.ts, type: "status", final: FINAL.has(d.to), bad: d.to === "FAILED" || d.to === "CANCELLED",
+            text: (STATUS_LINE[d.to] || d.to) + (reason ? `: ${oneLine(reason, 160)}` : "") });
+          break;
+        }
+      }
+    }
+    const res = { last, n: events.length, items, status, first };
+    foldCache.set(taskId, res); return res;
+  }
+
+  // What each item looks like right now. Work that was in flight when the task stopped is shown as stopped.
+  function effState(it, status) {
+    if (it.state === "running") return WORKING.has(status) ? "running" : "stopped";
+    if (it.state === "approval") return status === "AWAITING_APPROVAL" ? "approval" : "denied";
+    return it.state || "done";
+  }
+  function itemLine(it) {
+    if (it.type === "model") {
+      const who = roleLabel(it.role);
+      if (it.state === "running") return [who, "is thinking…"];
+      if (it.state === "failed") return [who, `failed: ${oneLine(it.error, 160)}`];
+      const call = (it.toolCalls || [])[0];
+      return [who, oneLine(it.thought) || oneLine(it.text) || (call ? `→ ${call.name}(${fmtArgs(call.arguments)})` : "(no reply)")];
+    }
+    if (it.type === "action") return [opLabel(it.op), opDetail(it)];
+    return [it.text, ""];
+  }
+  const hasBody = (it) => it.type === "model" ? !!(it.thought || it.text || (it.toolCalls || []).length || it.error)
+    : it.type === "action" ? !!(it.error || it.rationale || (it.args && Object.keys(it.args).length) || (it.policy && it.policy.reason)) : false;
+  function itemBody(it) {
+    const box = h("div", { class: "tr-body" });
+    const part = (label, content, cls = "") => box.append(h("div", { class: "tr-cap" }, label), h("div", { class: `tr-text ${cls}` }, content));
+    if (it.type === "model") {
+      if (it.thought) part("Reasoning", it.thought, "think");
+      if (it.text) part("Reply", it.text);
+      for (const tc of it.toolCalls || []) part("Chose", `${tc.name}(${fmtArgs(tc.arguments)})`, "mono");
+      if (it.error) part("Error", it.error);
+      const stats = [it.model, it.ms != null ? fmtDur(it.ms) : null, it.tokensIn != null ? `${it.tokensIn} in` : null,
+        it.tokensOut != null ? `${it.tokensOut} out` : null, it.images ? `${it.images} image${it.images > 1 ? "s" : ""}` : null].filter(Boolean);
+      if (stats.length) box.append(h("div", { class: "tr-stats" }, stats.join(" · ")));
+    } else {
+      if (it.rationale) part("Why", it.rationale);
+      if (it.args && Object.keys(it.args).length) part("Arguments", fmtArgs(it.args), "mono");
+      if (it.policy && it.policy.reason) part(`Policy: ${String(it.policy.verdict || "").toLowerCase().replace("_", " ")}`, it.policy.reason);
+      if (it.error && it.error !== (it.policy && it.policy.reason)) part("Problem", it.error);
+    }
+    return box;
+  }
+  function stateIcon(it, st) {
+    if (st === "running") return h("span", { class: "spin", "aria-label": "In progress" });
+    if (it.type === "note") return icon(it.warn ? "alert" : "info");
+    if (it.type === "you") return icon("reply");
+    if (it.type === "status") return icon(it.final ? (it.bad ? "x" : "check") : "clock");
+    const name = { done: it.type === "model" ? "sparkles" : "check", failed: "x", unknown: "alert", denied: "shield", approval: "shield", stopped: "pause", ended: "check" }[st];
+    return icon(name || "info");
+  }
+
+  // Header line of a task's trace: what it is doing right now, or how the work went.
+  function traceHead(t, fr, status) {
+    const live = WORKING.has(status);
+    const items = fr.items.filter((it) => !it.hidden);
+    const running = [...items].reverse().find((it) => effState(it, status) === "running");
+    const steps = items.filter((it) => it.type === "model" || (it.type === "action" && it.op !== "telegram.send_owner")).length;
+    const t0 = Date.parse(fr.first || (t && t.created_at));
+    const describe = (it) => { const [a, b] = itemLine(it); return it.type === "model" ? `${a} ${b}` : `${a}${b ? " " + oneLine(b, 90) : ""}`; };
+    if (live) {
+      const text = running ? describe(running) + (running.type === "model" ? "" : "…") : items.length ? describe(items[items.length - 1]) : "Starting…";
+      return { live, text, since: new Date(t0 - S.skew).toISOString(), steps };
+    }
+    if (status === "AWAITING_APPROVAL" || status === "AWAITING_USER" || status === "BLOCKED") return { live: false, wait: true, text: STATUS_LINE[status], steps };
+    const lastTs = fr.items.length ? Date.parse(fr.items[fr.items.length - 1].ts) : t0;
+    const verb = status === "FAILED" ? "Failed after" : status === "CANCELLED" ? "Cancelled after" : status === "PAUSED" ? "Paused after" : "Worked for";
+    return { live: false, text: `${verb} ${fmtDur(lastTs - t0) || "a moment"}`, steps };
+  }
+
+  const TRACE_ROWS = 40;
+  function traceCard(t) {
+    const fr = fold(t.task_id);
+    const status = FINAL.has(t.status) ? t.status : (fr.status || t.status);
+    const head = traceHead(t, fr, status);
+    const items = fr.items.filter((it) => !it.hidden && !(it.type === "status" && it.final && FINAL.has(status)));
+    // a chat reply that involved no reasoning or tools needs no trace once it has been delivered
+    const plainChat = t.workflow === "chat_workflow" && !items.some((it) => (it.type === "model" && it.thought) || it.state === "failed");
+    if (!head.live && !head.wait && (plainChat || !items.length)) return null;
+    const userSet = S.traceOpen.get(t.task_id);
+    const open = userSet != null ? userSet : (head.live || head.wait || status === "PAUSED");
+    const showAll = S.traceAll.has(t.task_id);
+    const sig = [fr.last, fr.n, status, open, showAll, [...S.itemOpen].filter((k) => k.startsWith(t.task_id)).join(",")].join("|");
+    const cached = S.traceEls.get(t.task_id);
+    if (cached && cached.dataset.key === sig) return cached;
+
+    const toggle = () => { S.traceOpen.set(t.task_id, !open); renderFeed(); };
+    const headEl = h("button", { class: "tr-head", "aria-expanded": String(open), onclick: toggle },
+      head.live ? h("span", { class: "spin" }) : icon(FINAL.has(status) ? (status === "FAILED" || status === "CANCELLED" ? "x" : "check") : head.wait ? "shield" : "pause"),
+      h("span", { class: "tr-title" }, head.text),
+      head.live ? h("span", { class: "tr-time", dataset: { since: head.since } }, fmtDur(nowMs() - Date.parse(head.since))) : null,
+      !head.live && head.steps ? h("span", { class: "tr-count" }, `${head.steps} step${head.steps === 1 ? "" : "s"}`) : null,
+      h("span", { class: `tr-chevron ${open ? "open" : ""}` }, icon("chevron")));
+    const card = h("div", { class: `card trace ${head.live ? "live" : ""}` }, headEl);
+    if (open && items.length) {
+      const list = h("div", { class: "tr-list" });
+      const shown = showAll ? items : items.slice(-TRACE_ROWS);
+      if (shown.length < items.length) list.appendChild(h("button", { class: "tr-more", onclick: () => { S.traceAll.add(t.task_id); renderFeed(); } },
+        `Show ${items.length - shown.length} earlier step${items.length - shown.length === 1 ? "" : "s"}`));
+      for (const it of shown) {
+        const st = effState(it, status); const [label, detail] = itemLine(it);
+        const key = `${t.task_id}:${it.id}`; const body = hasBody(it);
+        const isOpen = body && S.itemOpen.has(key);
+        const dur = st === "running" ? h("span", { class: "tr-time", dataset: { since: it.ts } }, fmtDur(nowMs() - Date.parse(it.ts)))
+          : it.endTs ? h("span", { class: "tr-time" }, fmtDur(Date.parse(it.endTs) - Date.parse(it.ts))) : null;
+        const lineKids = [stateIcon(it, st), h("span", { class: "tr-label" }, label), detail ? h("span", { class: "tr-detail" }, detail) : null, dur];
+        const row = body
+          ? h("button", { class: "tr-row", "aria-expanded": String(isOpen), onclick: () => { S.itemOpen.has(key) ? S.itemOpen.delete(key) : S.itemOpen.add(key); renderFeed(); } }, ...lineKids)
+          : h("div", { class: "tr-row" }, ...lineKids);
+        list.appendChild(h("div", { class: `tr-item ${it.type} ${st}${it.op === "browser.observe" ? " quiet" : ""}` }, row, isOpen ? itemBody(it) : null));
+      }
+      card.appendChild(list);
+    }
+    const el = h("div", { class: "msg assistant trace-msg", dataset: { key: sig } }, h("div", { class: "avatar logo" }), h("div", { class: "bubble" }, card));
+    S.traceEls.set(t.task_id, el); return el;
+  }
+
+  // Where each task's trace sits in the feed: under the message that started it, before the answer.
+  function traceSlots(msgs) {
+    const before = new Map(), after = new Map(), tail = [];
+    const tasks = convTasks().slice().sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    for (const t of tasks) {
+      const own = msgs.find((m) => m.task_id === t.task_id && m.role === "owner");
+      const reply = msgs.find((m) => m.task_id === t.task_id && m.role === "assistant");
+      const [map, m] = own ? [after, own] : reply ? [before, reply] : [null, null];
+      if (!map) tail.push(t); else { if (!map.has(m.id)) map.set(m.id, []); map.get(m.id).push(t); }
+    }
+    return { before, after, tail };
+  }
+
+  // Elapsed timers tick without rebuilding the feed.
+  function tickTimers() {
+    document.querySelectorAll(".tr-time[data-since]").forEach((el) => { el.textContent = fmtDur(nowMs() - Date.parse(el.dataset.since)); });
+  }
+  // One line for the sidebar: what a running chat is doing.
+  function activityLine(taskId) {
+    const t = S.taskMap.get(taskId); if (!t || !WORKING.has(t.status)) return null;
+    const fr = fold(taskId);
+    return traceHead(t, fr, fr.status || t.status).text;
+  }
+
+  let actGen = 0;
+  async function activityLoop() {
+    const gen = ++actGen; let backoff = 1000;
+    while (gen === actGen) {
+      try {
+        if (S.actCursor == null) S.actCursor = (await getJSON("/ui/api/activity?after=-1")).last_id;
+        const data = await getJSON(`/ui/api/activity?after=${S.actCursor}&wait=20`);
+        if (gen !== actGen) return;
+        backoff = 1000; S.actCursor = Math.max(S.actCursor, data.last_id);
+        if (data.events.length && addEvents(data.events)) feedSoon();
+      } catch (e) {
+        if (e instanceof AuthError) return;
+        await sleep(backoff); backoff = Math.min(backoff * 2, 15000);
+      }
+    }
+  }
+  // Earlier activity of a chat is loaded once, when it is opened; live events keep arriving from the cursor onward.
+  async function loadActivity(conv) {
+    if (S.actLoaded.has(conv)) return;
+    S.actLoaded.add(conv);
+    try {
+      const data = await getJSON(`/ui/api/activity?conversation=${encodeURIComponent(conv)}`);
+      if (addEvents(data.events)) feedSoon();
+    } catch { S.actLoaded.delete(conv); }
+  }
+  const feedSoon = debounce(() => { if (!S.firstLoad) { renderFeed(); renderTasks(); } }, 120);
 
   function renderFeed({ scroll = false } = {}) {
     const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120;
@@ -450,6 +736,8 @@
     const next = h("div", { class: "feed-inner" });
     if (!msgs.length) next.appendChild(welcome());
     let lastDay = null, prev = null;
+    const slots = traceSlots(msgs);
+    const putTraces = (tasks) => { for (const t of tasks || []) { const el = traceCard(t); if (el) { next.appendChild(el); prev = null; } } };
     for (const m of msgs) {
       const day = new Date(m.created_at).toDateString();
       if (day !== lastDay) { next.appendChild(h("div", { class: "day" }, dayLabel(m.created_at))); lastDay = day; prev = null; }
@@ -458,9 +746,11 @@
       if (!el || el.dataset.key !== key) { el = renderMessage(m); el.dataset.key = key; S.els.set(m.id, el); }
       const cont = prev && prev.role === m.role && m.role === "assistant" && (new Date(m.created_at) - new Date(prev.created_at)) < 120000;
       el.classList.toggle("cont", !!cont);
+      putTraces(slots.before.get(m.id));
       next.appendChild(el); prev = m;
+      putTraces(slots.after.get(m.id));
     }
-    const w = workingRow(); if (w) next.appendChild(w);
+    putTraces(slots.tail);
     feed.replaceChild(next, inner); inner = next;
     if (scroll || atBottom || S.firstLoad) {
       feed.scrollTop = feed.scrollHeight; $("jump").hidden = true;
@@ -526,7 +816,7 @@
       else if (S.replyTo) setReply(S.replyTo);  // status may have changed between steering and answering
       renderTasks(); renderTop();
       if (S.selected) loadDetail(S.selected);
-      if (!S.firstLoad) { const w = document.getElementById("workingRow"); const n = workingRow(); if (w && n) w.replaceWith(n); else if (!!w !== !!n) renderFeed(); }
+      if (!S.firstLoad) renderFeed();
     } catch { /* connection state is shown by the poll loop */ }
   }
   const refreshTasksSoon = debounce(refreshTasks, 300);
@@ -576,7 +866,8 @@
           h("span", { class: "goal" }, c.title),
           h("span", { class: "when" }, relTime(c.updated_at)),
           h("span", { class: "meta" }, h("span", { class: `dot ${scls}` }), slabel, " · ", wlabel,
-            c.tasks.length > 1 ? ` · ${c.tasks.length} requests` : "")));
+            c.tasks.length > 1 ? ` · ${c.tasks.length} requests` : "",
+            WORKING.has(c.status) ? h("span", { class: "doing" }, " · " + (activityLine(c.tasks.find((t) => WORKING.has(t.status)).task_id) || "")) : null)));
       }
     }
   }
@@ -599,6 +890,7 @@
     setReply(c && c.activeWork ? c.activeWork.task_id : null);
     if (c && c.work) focusTask(c.work.task_id); else openInspector(false, true);
     renderTasks(); renderTop(); renderFeed({ scroll: true });
+    loadActivity(key);
   }
   function newChat() {
     if (!visibleMessages().length) { setReply(null); return; }  // the open chat is already empty
@@ -998,9 +1290,11 @@
     await Promise.all([refreshTasks(), refreshBudget()]);
     openConv(S.conv);
     pollLoop();
+    activityLoop();
   }
   hydrateIcons(); applyTheme(); renderNotifyBtn(); renderModes(); updatePlaceholder(); updateSend(); renderFeed();
   setInterval(tickCountdowns, 1000);
+  setInterval(tickTimers, 1000);
   setInterval(() => { if (S.token && !document.hidden) refreshTasks(); }, 6000);
   setInterval(() => { if (S.token && !document.hidden) refreshBudget(); }, 30000);
   setInterval(() => { if (!document.hidden) renderTasks(); }, 60000);

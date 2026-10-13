@@ -43,7 +43,7 @@ from .models.types import ImageInput, ModelResponse
 from .policy import OPERATIONS, ApprovalError, PolicyContext
 from .policy.operations import ElementRef, origin_of
 from .tasks import TaskRecord, TransitionError
-from .util import digest, new_id, now_iso
+from .util import digest, new_id, now_iso, truncate
 from .workers import WorkerError, job_deadline
 
 if TYPE_CHECKING:
@@ -273,14 +273,36 @@ class TaskContext:
                     tools: list[dict[str, Any]] | None = None, tool_choice: Any = None,
                     max_output_tokens: int | None = None, temperature: float | None = 0.2) -> ModelResponse:
         async def run() -> dict[str, Any]:
-            resp = await self.c.router.call(
-                role, messages, images=images, tools=tools, tool_choice=tool_choice, max_output_tokens=max_output_tokens,
-                temperature=temperature, task_id=self.task.id, task_ceiling=self.task_ceiling(), purpose=role,
-                caller=f"task:{self.task.workflow}",
-            )
+            # the live activity trace in the UI is built from these events; replayed (journaled) calls emit nothing
+            self.c.tasks.event(self.task.id, "model_start", {"key": key, "role": role, "images": len(images or []),
+                                                             "tools": bool(tools)})
+            try:
+                resp = await self.c.router.call(
+                    role, messages, images=images, tools=tools, tool_choice=tool_choice,
+                    max_output_tokens=max_output_tokens, temperature=temperature, task_id=self.task.id,
+                    task_ceiling=self.task_ceiling(), purpose=role, caller=f"task:{self.task.workflow}",
+                )
+            except BaseException as exc:
+                self.c.tasks.event(self.task.id, "model_error", {"key": key, "role": role,
+                                                                 "error": truncate(f"{type(exc).__name__}: {exc}", 300)})
+                raise
+            self.c.tasks.event(self.task.id, "model_done", self._model_trace(key, role, resp))
             return resp.to_dict()
 
         return ModelResponse.from_dict(await self.step(f"model:{key}", run))
+
+    @staticmethod
+    def _model_trace(key: str, role: str, resp: ModelResponse) -> dict[str, Any]:
+        """What the owner may watch of a model call: what it reasoned, said and asked to do (bounded)."""
+        thought = resp.reasoning
+        usage = resp.usage or {}
+        return {
+            "key": key, "role": role, "model": resp.model, "route": resp.route_id, "latency_ms": resp.latency_ms,
+            "finish": resp.finish_reason, "tokens_in": usage.get("prompt_tokens"), "tokens_out": usage.get("completion_tokens"),
+            "thought": truncate(thought, 2000) if thought else None,
+            "text": truncate(resp.text, 1200) or None,
+            "tool_calls": [{"name": tc.name, "arguments": _args_preview(tc.arguments)} for tc in resp.tool_calls],
+        }
 
     # -- owner input ---------------------------------------------------------------------------------
     async def ask_owner(self, question: str, *, key: str, timeout_hours: float | None = None) -> str | None:
@@ -419,7 +441,8 @@ class TaskContext:
                  expected.model_dump_json() if expected else None, idem, ActionStatus.INTENDED.value, now, now),
             )
             self.c.tasks.event(self.task.id, "action_intent", {"action_id": action_id, "operation": operation,
-                                                               "rationale": rationale})
+                                                               "rationale": rationale, "arguments": _args_preview(arguments),
+                                                               "target": _target_label(arguments, observation)})
             row = self._action_row(idem)
         action_id = row["id"]
         status = ActionStatus(row["status"])
@@ -900,6 +923,23 @@ class TaskEngine:
         except TransitionError:
             return
         self.c.on_status_change(self.c.tasks.require(task_id), message)
+
+
+def _args_preview(arguments: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Arguments as shown in the activity trace: short values only, internal (underscore) fields left out."""
+    if not arguments:
+        return None
+    return {k: (v if isinstance(v, (int, float, bool)) or v is None else truncate(str(v), 160))
+            for k, v in list(arguments.items())[:8] if not k.startswith("_")}
+
+
+def _target_label(arguments: dict[str, Any], observation: Observation | None) -> str | None:
+    """The page element an action refers to, in words (``button "Show details"``), for the activity trace."""
+    ref = arguments.get("ref")
+    if observation is None or not ref:
+        return None
+    el = next((e for e in observation.elements if e.ref == ref), None)
+    return truncate(f'{el.role} "{el.name}"', 100) if el is not None else None
 
 
 def _ts(iso_str: str) -> float:
