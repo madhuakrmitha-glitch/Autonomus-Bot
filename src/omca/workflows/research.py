@@ -81,7 +81,7 @@ async def research_report(ctx) -> WorkflowOutcome:
     pages: list[RetrievedPage] = []
     for i, url in enumerate(urls):
         ctx.progress(f"reading source {i + 1}/{len(urls)}: {url}", phase="retrieve")
-        page = await ctx.step(f"retrieve:{i}", lambda url=url, i=i: _retrieve(ctx, url, i))
+        page = await ctx.step(f"retrieve:{i}", lambda url=url, i=i: retrieve_page(ctx, url, i))
         if page.get("page"):
             pages.append(RetrievedPage.model_validate(page["page"]))
         else:
@@ -190,12 +190,16 @@ def _routes(c, role: str):
         return []
 
 
-async def _retrieve(ctx, url: str, i: int) -> dict[str, Any]:
+async def retrieve_page(ctx, url: str, key: str | int) -> dict[str, Any]:
+    """Read a page through the retrieval API, falling back to the authorized browser.
+
+    Returns {"page": RetrievedPage dump} or {"gap": reason}; ``key`` keeps the actions of each read distinct.
+    """
     c = ctx.c
     pref = ctx.task.request.source_preference
     api_error = None
     if pref != "browser":
-        out = await ctx.act("web.retrieve", {"url": url, "formats": ["markdown"]}, key=f"fetch:{i}")
+        out = await ctx.act("web.retrieve", {"url": url, "formats": ["markdown"]}, key=f"fetch:{key}")
         if out.ok:
             return {"page": out.result["page"]}
         api_error = out.message or out.reason
@@ -203,7 +207,7 @@ async def _retrieve(ctx, url: str, i: int) -> dict[str, Any]:
     if att is None:
         return {"gap": f"API retrieval failed ({api_error}); no authorized browser session is configured"}
     try:
-        nav = await ctx.act("browser.navigate", {"url": url}, key=f"browse:{i}", attachment_id=att.id)
+        nav = await ctx.act("browser.navigate", {"url": url}, key=f"browse:{key}", attachment_id=att.id)
     except TaskBlocked as exc:
         return {"gap": f"API retrieval failed ({api_error}); browser unavailable ({exc})"}
     if not nav.ok:

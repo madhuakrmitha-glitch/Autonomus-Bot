@@ -61,6 +61,8 @@ class ModelResponse:
     image_transforms: list[ImageTransform] = field(default_factory=list)
     reasoning: str | None = None
     raw: dict[str, Any] | None = None
+    # provider reasoning blocks (e.g. signed thinking); sent back with the tool results of a multi-step exchange
+    reasoning_details: list[dict[str, Any]] | None = None
 
     def json(self) -> Any:
         """Parse a JSON answer from text (tolerates code fences)."""
@@ -77,6 +79,7 @@ class ModelResponse:
             "call_id": self.call_id,
             "latency_ms": self.latency_ms,
             "image_transforms": [t.__dict__ for t in self.image_transforms],
+            "reasoning_details": self.reasoning_details,
         }
 
     @staticmethod
@@ -86,6 +89,7 @@ class ModelResponse:
             tool_calls=[ToolCall(**tc) for tc in d["tool_calls"]], finish_reason=d.get("finish_reason"),
             usage=d.get("usage"), call_id=d["call_id"], latency_ms=d.get("latency_ms", 0),
             image_transforms=[ImageTransform(**t) for t in d.get("image_transforms", [])],
+            reasoning_details=d.get("reasoning_details"),
         )
 
 

@@ -203,6 +203,11 @@ class ModelRoute(_Base):
     enabled: bool = False
     request_timeout_seconds: float = 180
     extra_body: dict[str, Any] = Field(default_factory=dict)
+    reasoning_body: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Request fields that turn on the model's reasoning, sent only on calls that ask for it (General "
+                    "mode), e.g. {reasoning: {max_tokens: 1024}} on OpenRouter. Unlike extra_body it is not part of the "
+                    "probe fingerprint, so changing it does not require new probes")
     usage_reporting: bool = True
     dedicated: DedicatedEndpointConfig | None = None
     fixture: str | None = Field(default=None, description="Fixture behaviour name (tests only)")

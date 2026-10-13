@@ -4,7 +4,7 @@
  * Responsibilities, all fail-closed:
  *  1. Tool boundary: `before_tool_call` blocks every tool except the coordinator's MCP tools
  *     (`omca__*`) and blocks non-owner requesters. Raw exec/browser/file tools never run.
- *  2. Owner commands (/research, /video, /browse, /office, /tasks, /steer, /answer, /budget,
+ *  2. Owner commands (/general, /research, /video, /browse, /office, /tasks, /steer, /answer, /budget,
  *     /schedules, /schedule, /prefs and the /omca catch-all) bypass the LLM and are forwarded
  *     with OpenClaw's *verified* sender id to POST /bridge/openclaw/message.
  *  3. Approval buttons (callback data `omca:apr:<id>:y|n`) are routed to this plugin by
@@ -24,6 +24,7 @@ type BridgeConfig = {
 };
 
 const COMMANDS: Array<{ name: string; description: string }> = [
+  { name: "general", description: "OMCA: chat that can search, read pages, write documents, research and browse" },
   { name: "research", description: "OMCA: research a topic into a cited Word report" },
   { name: "video", description: "OMCA: timestamped analysis of a website video" },
   { name: "browse", description: "OMCA: operate the authorized browser for a goal" },

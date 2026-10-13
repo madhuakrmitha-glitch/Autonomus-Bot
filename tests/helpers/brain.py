@@ -122,6 +122,9 @@ class Brain:
         self.office_plan: list[dict[str, Any]] | None = None
         self.zoom_queue: list[str] = []
         self.verify_markers = ["Target hit", "Battery capacity", "Message sent", "Theme changed", "Deleted", "Archived"]
+        # General mode: scripted replies (text and/or tool calls), one per model round; plain text once empty
+        self.general_script: list[dict[str, Any]] = []
+        self.general_bodies: list[dict[str, Any]] = []
 
     # entry point registered with register_fixture
     def __call__(self, route, body: dict[str, Any]) -> dict[str, Any]:
@@ -130,6 +133,9 @@ class Brain:
         self.calls.append({"route": route.id, "system": system[:200], "user": user[:300], "tools": bool(body.get("tools")),
                            "images": len(_images(body))})
         both = system + "\n" + user
+        if "OMCA's general assistant" in system:
+            self.general_bodies.append(body)
+            return self.general_script.pop(0) if self.general_script else fixture_reply("Happy to help.")
         if "You plan web research" in both:
             goal = re.search(r"Research request: (.*)", user)
             g = goal.group(1) if goal else "research"

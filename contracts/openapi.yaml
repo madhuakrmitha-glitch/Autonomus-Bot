@@ -1656,6 +1656,7 @@ components:
           - browser_task
           - desktop_workflow
           - chat_workflow
+          - general_workflow
           - auto
           title: Workflow
           default: auto

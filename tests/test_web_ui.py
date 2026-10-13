@@ -179,7 +179,16 @@ def test_each_chat_keeps_its_own_messages_and_tasks(web):
     feed = client.get("/ui/api/messages", headers=OWNER).json()["messages"]
     by_chat = {c: [m["text"] for m in feed if m["conversation_id"] == c and m["role"] == "owner"] for c in (a, b)}
     assert "hello from chat a" in by_chat[a] and "/budget" in by_chat[b] and "hello from chat a" not in by_chat[b]
-    assert all(m["conversation_id"] == a for m in feed if m["task_id"] == task.id)  # the ack inherits the task's chat
+    assert all(m["conversation_id"] == a for m in feed if m["task_id"] == task.id)
+    # a chat reply gets no acknowledgement; other work does, and the ack inherits the task's chat
+    rr = client.post("/ui/api/messages", data={"text": "/research rooftop solar", "conversation_id": a}, headers=OWNER).json()
+    feed = client.get("/ui/api/messages", headers=OWNER).json()["messages"]
+    acks = [m for m in feed if m["task_id"] == rr["task_id"] and m["role"] == "assistant"]
+    assert acks and all(m["conversation_id"] == a for m in acks)
+    # the /omca spelling of a command stays in the chat it was typed in
+    ro = client.post("/ui/api/messages", data={"text": "/omca browse open the pricing page", "conversation_id": b},
+                     headers=OWNER).json()
+    assert coord.tasks.require(ro["task_id"]).conversation_id == b
     assert client.post("/ui/api/messages", data={"text": "hi", "conversation_id": "../x"}, headers=OWNER).status_code == 400
 
 

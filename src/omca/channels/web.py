@@ -16,7 +16,7 @@ from ..util import now_iso
 
 # Task events worth showing as live activity (the rest, such as stale receipts, are audit detail).
 ACTIVITY_KINDS = ("progress", "model_start", "model_done", "model_error", "action_intent", "policy", "action_receipt",
-                  "limitation", "reconciled", "status", "owner_steer", "owner_owner_input")
+                  "tool_result", "limitation", "reconciled", "status", "owner_steer", "owner_owner_input")
 ACTIVITY_LIMIT = 600
 
 

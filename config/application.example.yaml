@@ -111,6 +111,7 @@ models:
       auth_ref: null
       enabled: false               # enable after `omca models probe local-qwen35-9b` passes
       extra_body: {}
+      reasoning_body: {}           # fields that turn reasoning on, sent only by General mode; e.g. OpenRouter: {reasoning: {max_tokens: 1024}}
     - id: deepinfra-qwen35-35b     # hosted OpenAI-compatible API (S17)
       provider: openai_compatible
       base_url: https://api.deepinfra.com/v1/openai

@@ -67,6 +67,15 @@ frontier executes live. Evidence and claim IDs are derived from stable step keys
 idempotent. Browser workflows re-check the live page at the first observation after any (re)start and
 restore the last known page if the browser session was lost.
 
+## General mode and sub-tasks
+
+`workflows/general.py` runs a tool loop: the model's tool calls (web search, page reading, Word documents)
+execute through `ctx.act`, and their results go back to it as `tool` messages until it replies without one.
+Heavy work is delegated with `TaskContext.subtask()`, which creates a child task (`origin = "subtask"`,
+`params.parent_task_id`) in the same conversation, starts it at once rather than queueing it behind its
+parent, and waits until it ends, blocks or pauses. The child keeps its own journal, evidence, approvals and
+delivery. Cancelling the parent cancels the child; chat history (`workflows/chat.py::_turns`) skips children.
+
 ## Task lifecycle (figure 3)
 
 `QUEUED → RUNNING → {AWAITING_APPROVAL, AWAITING_USER, BLOCKED, PAUSED} → RUNNING → VERIFYING →

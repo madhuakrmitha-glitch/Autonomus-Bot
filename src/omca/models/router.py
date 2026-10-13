@@ -97,6 +97,7 @@ class ModelRouter:
         purpose: str | None = None,
         caller: str = "coordinator",
         response_format: dict[str, Any] | None = None,
+        reasoning: bool = False,
     ) -> ModelResponse:
         images = images or []
         needs = {"text"}
@@ -117,7 +118,7 @@ class ModelRouter:
             try:
                 return await self._call_route(route, messages, images, tools, tool_choice, max_output_tokens,
                                               temperature, task_id, task_ceiling, purpose or role, caller,
-                                              response_format)
+                                              response_format, reasoning=reasoning)
             except BudgetBlocked:
                 raise
             except ProviderError as exc:
@@ -143,12 +144,12 @@ class ModelRouter:
         return await self._call_route(route, messages, kw.get("images") or [], kw.get("tools"), kw.get("tool_choice"),
                                       kw.get("max_output_tokens"), kw.get("temperature", 0.2), kw.get("task_id"),
                                       kw.get("task_ceiling"), kw.get("purpose", "direct"), kw.get("caller", "coordinator"),
-                                      kw.get("response_format"))
+                                      kw.get("response_format"), reasoning=kw.get("reasoning", False))
 
     # -- internals -----------------------------------------------------------------------
     def build_body(self, route: ModelRoute, messages: list[dict[str, Any]], images: list[ImageInput],
                    tools: list[dict[str, Any]] | None, tool_choice: Any, max_tokens: int,
-                   temperature: float | None, response_format: dict[str, Any] | None
+                   temperature: float | None, response_format: dict[str, Any] | None, reasoning: bool = False
                    ) -> tuple[dict[str, Any], list[ImageTransform], int]:
         msgs = [dict(m) for m in messages]
         transforms: list[ImageTransform] = []
@@ -179,13 +180,15 @@ class ModelRouter:
         if response_format:
             body["response_format"] = response_format
         body.update(route.extra_body)
+        if reasoning:
+            body.update(route.reasoning_body)
         return body, transforms, image_tokens
 
     async def _call_route(self, route, messages, images, tools, tool_choice, max_output_tokens, temperature, task_id,
-                          task_ceiling, purpose, caller, response_format) -> ModelResponse:
+                          task_ceiling, purpose, caller, response_format, *, reasoning: bool = False) -> ModelResponse:
         max_tokens = min(max_output_tokens or route.max_output_tokens, route.max_output_tokens)
         body, transforms, image_tokens = self.build_body(route, messages, images, tools, tool_choice, max_tokens,
-                                                         temperature, response_format)
+                                                         temperature, response_format, reasoning)
         n_images = len(count_images(body["messages"]))
         text_tokens = estimate_message_tokens(body["messages"]) + (estimate_text_tokens(str(tools)) if tools else 0)
         if n_images and not image_tokens:
@@ -259,4 +262,5 @@ class ModelRouter:
             route_id=route.id, model=route.model, text=strip_thinking(content), tool_calls=calls,
             finish_reason=choice.get("finish_reason"), usage=raw.get("usage"), call_id=call_id, latency_ms=latency,
             image_transforms=transforms, reasoning=msg.get("reasoning_content") or msg.get("reasoning") or thinking_of(content) or None, raw=None,
+            reasoning_details=msg.get("reasoning_details") or None,
         )

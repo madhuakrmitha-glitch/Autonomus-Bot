@@ -37,10 +37,13 @@ def _digest(c: Any, current_id: str) -> str:
 
 
 def _turns(c: Any, task: Any) -> list[dict[str, str]]:
-    """Earlier turns of this task's conversation, oldest first, as user/assistant messages."""
+    """Earlier turns of this task's conversation, oldest first, as user/assistant messages.
+
+    Sub-tasks that General started in the chat are its own work, not something the user said, so they are left out.
+    """
     turns: list[dict[str, str]] = []
     prior = [t for t in reversed(c.tasks.list(limit=CONVERSATION_TURNS, conversation_id=task.conversation_id))
-             if t.id != task.id and t.created_at <= task.created_at]
+             if t.id != task.id and t.created_at <= task.created_at and t.origin != "subtask"]
     for t in prior:
         turns.append({"role": "user", "content": t.goal})
         if t.terminal and t.result and t.result.get("summary"):
@@ -50,27 +53,21 @@ def _turns(c: Any, task: Any) -> list[dict[str, str]]:
     return turns
 
 
-async def chat_workflow(ctx: Any) -> WorkflowOutcome:
-    c = ctx.c
-    goal = ctx.task.goal
-
-    ctx.progress("understanding the request", phase="plan")
-
-    sys_msg = system_prompt(ctx, "You are a helpful assistant.")
+def conversation_messages(ctx: Any, sys_msg: str) -> list[dict[str, Any]]:
+    """System prompt, the chat's earlier turns (or a digest of recent tasks outside a chat), then this message."""
+    goal = {"role": "user", "content": ctx.task.goal}
     if ctx.task.conversation_id:
-        history = [{"role": "system", "content": sys_msg}, *_turns(c, ctx.task), {"role": "user", "content": goal}]
-    else:
-        digest = _digest(c, ctx.task.id)
-        if digest:
-            sys_msg += f"\n\nRecent conversation and task context:\n{digest}"
-        history = [{"role": "system", "content": sys_msg}, {"role": "user", "content": goal}]
+        return [{"role": "system", "content": sys_msg}, *_turns(ctx.c, ctx.task), goal]
+    digest = _digest(ctx.c, ctx.task.id)
+    if digest:
+        sys_msg += f"\n\nRecent conversation and task context:\n{digest}"
+    return [{"role": "system", "content": sys_msg}, goal]
 
-    for ev in c.tasks.events(ctx.task.id):
-        if ev["kind"] in ("instruction", "answer"):
-            history.append({"role": "user", "content": ev.get("text", "")})
 
+async def chat_workflow(ctx: Any) -> WorkflowOutcome:
+    ctx.progress("understanding the request", phase="plan")
+    history = conversation_messages(ctx, system_prompt(ctx, "You are a helpful assistant."))
     response = await ctx.model("planning", history, key="chat_response", max_output_tokens=2048)
-
-    await ctx.act("telegram.send_owner", {"text": response.text}, key="deliver")
-
-    return WorkflowOutcome("COMPLETED", "Responded to the user.", result={"summary": response.text[:REPLY_CHARS]})
+    delivered = await ctx.act("telegram.send_owner", {"text": response.text}, key="deliver")
+    # the reply is the result: later turns of this chat read it back from the task summary
+    return WorkflowOutcome("COMPLETED", response.text[:REPLY_CHARS], checks_passed=delivered.ok)

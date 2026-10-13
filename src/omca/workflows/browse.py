@@ -19,14 +19,9 @@ from ..evidence import locate_excerpt
 from ..models.registry import RouteRejected
 from ..models.types import ImageInput, ImageTransform
 from ..util import now_iso, parse_iso, truncate, utcnow
-from .common import model_json, system_prompt, untrusted
+from .common import model_json, system_prompt, tool, untrusted
 
 URL = re.compile(r"https?://[^\s<>\"']+")
-
-
-def tool(name: str, description: str, props: dict[str, Any], required: list[str]) -> dict[str, Any]:
-    return {"type": "function", "function": {"name": name, "description": description,
-                                             "parameters": {"type": "object", "properties": props, "required": required}}}
 
 
 EXPECT = {"expect_url_contains": {"type": "string"}, "expect_text": {"type": "string"}}

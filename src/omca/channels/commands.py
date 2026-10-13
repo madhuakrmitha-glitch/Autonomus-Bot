@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ..coordinator import Coordinator
 
 HELP = """Commands
+/general <message> - chat that searches, reads pages, writes documents, researches or browses when needed
 /research <topic> - cited Word report
 /video <url> [question] - timestamped video analysis
 /browse <goal> - operate the authorized browser
@@ -34,7 +35,7 @@ HELP = """Commands
 /budget - model spend this month
 /schedules, /schedule add|pause|resume|run ...
 /prefs [set <key> <value> | del <key>]
-Any other message starts a new task."""
+Any other message goes to General, unless it looks like a video, office or browser task."""
 
 URL = re.compile(r"https?://\S+")
 
@@ -156,9 +157,11 @@ class OwnerInterface:
             sub, _, more = rest.partition(" ")
             if not sub:
                 return HELP
-            return await self._command(identity, f"/{sub} {more}".strip(), attachments)
+            return await self._command(identity, f"/{sub} {more}".strip(), attachments, conversation_id)
         if cmd in ("/start", "/help"):
             return HELP
+        if cmd == "/general":
+            return self._new_task(rest, "general_workflow", attachments, conversation_id=conversation_id) if rest else "Usage: /general <message>"
         if cmd == "/research":
             return self._new_task(rest, "research_report", attachments, conversation_id=conversation_id) if rest else "Usage: /research <topic>"
         if cmd == "/video":

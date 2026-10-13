@@ -23,6 +23,12 @@ def untrusted(label: str, text: str, limit: int = 12000) -> str:
     return f'<untrusted_source origin="{label}">\n{truncate(text, limit)}\n</untrusted_source>'
 
 
+def tool(name: str, description: str, props: dict[str, Any], required: list[str]) -> dict[str, Any]:
+    """A function tool definition in the chat-completions format."""
+    return {"type": "function", "function": {"name": name, "description": description,
+                                             "parameters": {"type": "object", "properties": props, "required": required}}}
+
+
 def system_prompt(ctx: Any, role_text: str) -> str:
     prefs = ctx.c.memory.prompt_context()
     steer = ctx.steering()

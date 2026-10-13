@@ -52,8 +52,8 @@ def build_server(base_url: str | None = None, token: str | None = None) -> Any:
                             for a in view.get("artifacts", [])]
         return out
 
-    @server.tool(description="Create a durable task. workflow: auto, research_report, video_analysis, browser_task, "
-                             "desktop_workflow, chat_workflow. The owner receives acknowledgement, progress and results in Telegram.")
+    @server.tool(description="Create a durable task. workflow: auto, general_workflow, research_report, video_analysis, "
+                             "browser_task, desktop_workflow, chat_workflow. The owner receives acknowledgement, progress and results in Telegram.")
     def create_task(goal: str, workflow: str = "auto", sources: list[str] | None = None, url: str | None = None,
                     question: str | None = None) -> dict[str, Any]:
         params: dict[str, Any] = {}

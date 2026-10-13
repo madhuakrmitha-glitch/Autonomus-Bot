@@ -154,18 +154,23 @@
   const WORKING = new Set(["QUEUED", "RUNNING", "VERIFYING"]);
   const WORKFLOWS = {
     research_report: ["Research", "book"], video_analysis: ["Video", "video"], browser_task: ["Browse", "globe"],
-    desktop_workflow: ["Office", "briefcase"], chat_workflow: ["Chat", "message-square"],
+    desktop_workflow: ["Office", "briefcase"], chat_workflow: ["Chat", "message-square"], general_workflow: ["General", "message-square"],
   };
+  // chat-style workflows: each message is a short task whose reply is the result, not long-running work to track
+  const CHATTY = new Set(["chat_workflow", "general_workflow"]);
   const wf = (w) => WORKFLOWS[w] || ["Task", "sparkles"];
   const pill = (status) => { const [label, cls] = STATUS[status] || [status, ""]; return h("span", { class: `pill ${cls}` }, label); };
   const MODES = [
     { prefix: "", label: "Auto", icon: "sparkles", hint: "Describe a task…" },
+    { prefix: "/general ", label: "General", icon: "message-square", hint: "Ask anything — I'll search, browse, research or write a document when it helps" },
     { prefix: "/research ", label: "Research", icon: "book", hint: "What should I research? I'll write a cited Word report." },
     { prefix: "/video ", label: "Video", icon: "video", hint: "Paste a video URL, then an optional question" },
     { prefix: "/browse ", label: "Browse", icon: "globe", hint: "What should I do in the browser?" },
     { prefix: "/office ", label: "Office", icon: "briefcase", hint: "Spreadsheet, email or calendar goal" },
   ];
+  const modeIdx = (label) => MODES.findIndex((m) => m.label === label);
   const COMMANDS = [
+    ["/general", "<message>", "Chat that can search, browse, research and write documents"],
     ["/research", "<topic>", "Cited Word report on a topic"], ["/video", "<url> [question]", "Timestamped video analysis"],
     ["/browse", "<goal>", "Operate the browser"], ["/office", "<goal>", "Spreadsheet, email or calendar"],
     ["/tasks", "", "List recent tasks"], ["/status", "<id>", "Progress of a task"], ["/pause", "<id|all>", "Pause a task"],
@@ -401,12 +406,12 @@
     for (const t of S.tasks) { const k = convOfTask(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
     return [...groups].map(([key, tasks]) => {
       const first = tasks[tasks.length - 1], latest = tasks[0];
-      const work = tasks.find((t) => t.workflow !== "chat_workflow");
+      const work = tasks.find((t) => !CHATTY.has(t.workflow));
       const lead = tasks.find((t) => NEEDS_YOU.has(t.status)) || tasks.find((t) => WORKING.has(t.status)) || latest;
       return {
         key, tasks, title: first.goal, latest, work, status: lead.status, workflow: (work || latest).workflow,
         updated_at: tasks.reduce((m, t) => (t.updated_at > m ? t.updated_at : m), ""), active: tasks.some((t) => ACTIVE.has(t.status)),
-        needs: tasks.some((t) => NEEDS_YOU.has(t.status)), activeWork: tasks.find((t) => t.workflow !== "chat_workflow" && ACTIVE.has(t.status)),
+        needs: tasks.some((t) => NEEDS_YOU.has(t.status)), activeWork: tasks.find((t) => !CHATTY.has(t.workflow) && ACTIVE.has(t.status)),
       };
     });
   }
@@ -414,15 +419,16 @@
 
   function welcome() {
     const ex = [
-      [1, "Research a topic", "Rooftop solar adoption in India, with sources", "rooftop solar adoption in India"],
-      [3, "Do something on a website", "Find a page and pull out the details you need", "Go to https://en.wikipedia.org and find the population of Bengaluru"],
-      [2, "Analyse a video", "Summarise with timestamps or answer a question", ""],
-      [4, "Office work", "Draft an email, update a spreadsheet, plan a meeting", "Draft an email to the team summarising this week's progress"],
+      ["Research", "Research a topic", "Rooftop solar adoption in India, with sources", "rooftop solar adoption in India"],
+      ["Browse", "Do something on a website", "Find a page and pull out the details you need", "Go to https://en.wikipedia.org and find the population of Bengaluru"],
+      ["Video", "Analyse a video", "Summarise with timestamps or answer a question", ""],
+      ["Office", "Office work", "Draft an email, update a spreadsheet, plan a meeting", "Draft an email to the team summarising this week's progress"],
     ];
     const wrap = h("div", { class: "welcome" }, h("div", { class: "logo big" }), h("h2", {}, greeting()),
       h("p", {}, "Tell me what to work on. I'll keep you posted here and ask before anything important."));
     const grid = h("div", { class: "examples" });
-    for (const [mode, title, sub, text] of ex) {
+    for (const [label, title, sub, text] of ex) {
+      const mode = modeIdx(label);
       grid.appendChild(h("button", { class: "example", onclick: () => { setMode(mode); setInput(text); } },
         h("span", { class: "ex-icon" }, icon(MODES[mode].icon)), h("div", {}, h("strong", {}, title), h("span", {}, sub))));
     }
@@ -449,8 +455,14 @@
     "browser.type": "Type", "browser.press": "Press key", "browser.select": "Choose option", "browser.scroll": "Scroll",
     "browser.back": "Go back", "browser.wait": "Wait", "browser.agent_task": "Browser Use agent",
     "telegram.send_owner": "Send reply", "file.write": "Save file", "email.send": "Send email",
+    "search.query": "Search the web", "web.retrieve": "Read page",
   };
   const HIDDEN_OPS = new Set(["browser.hit_test"]);
+  // what a General-mode tool handed back to the model
+  const TOOL_RESULTS = { web_search: "Search results", read_webpage: "Page text", write_document: "Document",
+    research_report: "Research task result", browser_task: "Browser task result" };
+  const toolLabel = (name) => TOOL_RESULTS[name] || `${name} result`;
+  const plainResult = (s) => String(s || "").replace(/<\/?untrusted_source[^>]*>/g, " ");
   const opLabel = (op) => OPS[op] || String(op || "action").replace(/[._]/g, " ").replace(/^./, (c) => c.toUpperCase());
   const quote = (s) => `“${s}”`;
   function fmtArgs(a) { return Object.entries(a || {}).map(([k, v]) => `${k}=${typeof v === "string" ? JSON.stringify(v) : v}`).join(", "); }
@@ -467,6 +479,8 @@
       case "browser.scroll": return a.dy < 0 ? "up" : "down";
       case "browser.wait": return a.text ? `for ${quote(a.text)}` : a.ms ? `${a.ms} ms` : "";
       case "browser.agent_task": return a.goal || "";
+      case "search.query": return a.query ? quote(a.query) : "";
+      case "web.retrieve": return a.url || "";
       case "telegram.send_owner": return a.text || "";
       default: return fmtArgs(a);
     }
@@ -548,6 +562,7 @@
           if (d.error) it.error = d.error.message || d.error.code;
           break;
         }
+        case "tool_result": items.push({ id: e.id, ts: e.ts, type: "tool", name: d.name, text: d.result, state: d.ok ? "done" : "failed" }); break;
         case "limitation": items.push({ id: e.id, ts: e.ts, type: "note", warn: true, text: `Limitation: ${d.text}` }); break;
         case "reconciled": items.push({ id: e.id, ts: e.ts, type: "note", text: `Recovered an earlier action (${d.via})` }); break;
         case "owner_steer": items.push({ id: e.id, ts: e.ts, type: "you", text: `You steered: ${d.text}` }); break;
@@ -557,7 +572,7 @@
           if (d.from === "QUEUED" && d.to === "RUNNING") break;
           if (d.to === "RUNNING") { items.push({ id: e.id, ts: e.ts, type: "status", text: "Resumed" }); break; }
           const reason = d.reason || (d.error_code && FINAL.has(d.to) ? d.error_code : "");
-          items.push({ id: e.id, ts: e.ts, type: "status", final: FINAL.has(d.to), bad: d.to === "FAILED" || d.to === "CANCELLED",
+          items.push({ id: e.id, ts: e.ts, type: "status", to: d.to, final: FINAL.has(d.to), bad: d.to === "FAILED" || d.to === "CANCELLED",
             text: (STATUS_LINE[d.to] || d.to) + (reason ? `: ${oneLine(reason, 160)}` : "") });
           break;
         }
@@ -582,9 +597,11 @@
       return [who, oneLine(it.thought) || oneLine(it.text) || (call ? `→ ${call.name}(${fmtArgs(call.arguments)})` : "(no reply)")];
     }
     if (it.type === "action") return [opLabel(it.op), opDetail(it)];
+    if (it.type === "tool") return [toolLabel(it.name), oneLine(plainResult(it.text))];
     return [it.text, ""];
   }
   const hasBody = (it) => it.type === "model" ? !!(it.thought || it.text || (it.toolCalls || []).length || it.error)
+    : it.type === "tool" ? !!it.text
     : it.type === "action" ? !!(it.error || it.rationale || (it.args && Object.keys(it.args).length) || (it.policy && it.policy.reason)) : false;
   function itemBody(it) {
     const box = h("div", { class: "tr-body" });
@@ -597,6 +614,8 @@
       const stats = [it.model, it.ms != null ? fmtDur(it.ms) : null, it.tokensIn != null ? `${it.tokensIn} in` : null,
         it.tokensOut != null ? `${it.tokensOut} out` : null, it.images ? `${it.images} image${it.images > 1 ? "s" : ""}` : null].filter(Boolean);
       if (stats.length) box.append(h("div", { class: "tr-stats" }, stats.join(" · ")));
+    } else if (it.type === "tool") {
+      part("Returned to the model", it.text, "mono");
     } else {
       if (it.rationale) part("Why", it.rationale);
       if (it.args && Object.keys(it.args).length) part("Arguments", fmtArgs(it.args), "mono");
@@ -637,9 +656,12 @@
     const fr = fold(t.task_id);
     const status = FINAL.has(t.status) ? t.status : (fr.status || t.status);
     const head = traceHead(t, fr, status);
-    const items = fr.items.filter((it) => !it.hidden && !(it.type === "status" && it.final && FINAL.has(status)));
+    // a chat reply has nothing to check beyond its delivery, so its verifying step is left out
+    const items = fr.items.filter((it) => !it.hidden && !(it.type === "status" && it.final && FINAL.has(status))
+      && !(it.type === "status" && it.to === "VERIFYING" && CHATTY.has(t.workflow)));
     // a chat reply that involved no reasoning or tools needs no trace once it has been delivered
-    const plainChat = t.workflow === "chat_workflow" && !items.some((it) => (it.type === "model" && it.thought) || it.state === "failed");
+    const plainChat = CHATTY.has(t.workflow) && !items.some((it) => (it.type === "model" && (it.thought || (it.toolCalls || []).length))
+      || (it.type === "action" && it.op !== "telegram.send_owner") || it.state === "failed");
     if (!head.live && !head.wait && (plainChat || !items.length)) return null;
     const userSet = S.traceOpen.get(t.task_id);
     const open = userSet != null ? userSet : (head.live || head.wait || status === "PAUSED");
@@ -1086,7 +1108,7 @@
       await refreshTasks();
       const t = r.task_id && S.taskMap.get(r.task_id);
       // a long-running task started here becomes this chat's reply target; plain chat answers need no tracking
-      if (t && S.conv === conv && t.workflow !== "chat_workflow" && ACTIVE.has(t.status) && !/^\/(steer|answer|pause|resume|cancel|status)/.test(text)) {
+      if (t && S.conv === conv && !CHATTY.has(t.workflow) && ACTIVE.has(t.status) && !/^\/(steer|answer|pause|resume|cancel|status)/.test(text)) {
         setReply(t.task_id); focusTask(t.task_id);
       }
       renderTasks(); renderTop(); renderFeed({ scroll: true });
@@ -1139,10 +1161,10 @@
   function paletteCommands() {
     const cmds = [
       ["New chat", "plus", () => newTask(), "N"],
-      ["Research a topic", "book", () => { newTask(); setMode(1); }],
-      ["Browse a website", "globe", () => { newTask(); setMode(3); }],
-      ["Analyse a video", "video", () => { newTask(); setMode(2); }],
-      ["Office task", "briefcase", () => { newTask(); setMode(4); }],
+      ["Research a topic", "book", () => { newTask(); setMode(modeIdx("Research")); }],
+      ["Browse a website", "globe", () => { newTask(); setMode(modeIdx("Browse")); }],
+      ["Analyse a video", "video", () => { newTask(); setMode(modeIdx("Video")); }],
+      ["Office task", "briefcase", () => { newTask(); setMode(modeIdx("Office")); }],
       ["Budget", "wallet", () => showBudget()],
       ["Schedules", "calendar", () => sendText("/schedules")],
       ["Toggle theme", "sun", () => cycleTheme()],

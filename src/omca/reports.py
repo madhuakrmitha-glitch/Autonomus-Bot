@@ -151,6 +151,113 @@ def build_docx(inp: ReportInput) -> tuple[bytes, dict[str, str]]:
     return buf.getvalue(), labels
 
 
+HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*$")
+BULLET = re.compile(r"^(\s*)[-*+]\s+(.*)$")
+NUMBERED = re.compile(r"^(\s*)\d+[.)]\s+(.*)$")
+RULE = re.compile(r"^([-*_])\1{2,}$")
+TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
+INLINE = re.compile(r"(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\s][^*\n]*\*)")
+
+
+def _runs(p: Any, text: str) -> None:
+    """Add ``text`` to a paragraph, rendering **bold**, *italic* and `code`."""
+    for part in INLINE.split(text):
+        if not part:
+            continue
+        if len(part) > 4 and part.startswith("**") and part.endswith("**"):
+            p.add_run(part[2:-2]).bold = True
+        elif len(part) > 2 and part.startswith("`") and part.endswith("`"):
+            p.add_run(part[1:-1]).font.name = "Consolas"
+        elif len(part) > 2 and part.startswith("*") and part.endswith("*"):
+            p.add_run(part[1:-1]).italic = True
+        else:
+            p.add_run(part)
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def build_document(title: str, markdown: str, *, task_id: str, generated_at: str, timezone: str) -> bytes:
+    """A free-form Word document from simple Markdown: headings, lists, tables, quotes, code, **bold**, *italic*."""
+    doc = Document()
+    doc.styles["Normal"].font.name = "Calibri"
+    doc.styles["Normal"].font.size = Pt(11)
+    doc.add_heading(title, level=0)
+    doc.add_paragraph().add_run(f"Task {task_id} | generated {display_time(generated_at, timezone)}").italic = True
+    lines = (markdown or "").replace("\r\n", "\n").split("\n")
+    para: list[str] = []
+    started = False
+
+    def flush() -> None:
+        if para:
+            _runs(doc.add_paragraph(), " ".join(para))
+            para.clear()
+
+    i = 0
+    while i < len(lines):
+        line, stripped = lines[i], lines[i].strip()
+        if stripped.startswith("```"):
+            flush()
+            code: list[str] = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                code.append(lines[i])
+                i += 1
+            run = doc.add_paragraph().add_run("\n".join(code))
+            run.font.name = "Consolas"
+            run.font.size = Pt(9.5)
+            i += 1
+            started = True
+            continue
+        if stripped.startswith("|") and i + 1 < len(lines) and TABLE_SEP.match(lines[i + 1]):
+            flush()
+            header, rows = _cells(line), []
+            i += 2
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                rows.append(_cells(lines[i]))
+                i += 1
+            table = doc.add_table(rows=1 + len(rows), cols=len(header))
+            table.style = "Table Grid"
+            for r, cells in enumerate([header, *rows]):
+                for col in range(len(header)):
+                    p = table.cell(r, col).paragraphs[0]
+                    _runs(p, cells[col] if col < len(cells) else "")
+                    if r == 0:
+                        for run in p.runs:
+                            run.bold = True
+            started = True
+            continue
+        heading, bullet, numbered = HEADING.match(stripped), BULLET.match(line), NUMBERED.match(line)
+        if heading:
+            flush()
+            # models often repeat the title as the first heading
+            if started or heading.group(2).strip() != title.strip():
+                doc.add_heading(heading.group(2), level=min(len(heading.group(1)), 3))
+        elif RULE.match(stripped):
+            flush()
+        elif bullet or numbered:
+            flush()
+            m = bullet or numbered
+            style = ("List Bullet" if bullet else "List Number") + (" 2" if len(m.group(1)) >= 2 else "")
+            _runs(doc.add_paragraph(style=style), m.group(2))
+        elif stripped.startswith(">"):
+            flush()
+            _runs(doc.add_paragraph(style="Quote"), stripped.lstrip("> "))
+        elif not stripped:
+            flush()
+        else:
+            para.append(stripped)
+        started = started or bool(stripped)
+        i += 1
+    flush()
+    doc.core_properties.title = title[:200]
+    doc.core_properties.subject = f"OMCA task {task_id}"
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
 def docx_text(data: bytes) -> str:
     doc = Document(io.BytesIO(data))
     parts = [p.text for p in doc.paragraphs]

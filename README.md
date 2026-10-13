@@ -88,6 +88,21 @@ how long, the reasoning it returned, the action it chose (`Click button "Show de
 you. It collapses to "Worked for 19s · 12 steps" when the task ends and can be reopened later; click any model or action
 row for the full reasoning, arguments and token counts. The trace is built from task events served by `GET /ui/api/activity`.
 
+## General mode
+
+**General** (`/general <message>`, or the General button in the web UI) is a chatbot that answers directly and uses
+tools only when they help. It can search the web, read pages, write a Word document (saved to the reports folder and
+sent to the chat), and hand a cited research report or a multi-step browser task to the Research and Browse
+workflows. Those run as sub-tasks in the same chat, with their own approvals and checks; General waits for them and
+uses their results in its reply. Cancelling General cancels the sub-task it is waiting on. Free text that is not a
+video, office or browser task goes to General.
+
+Its activity trace shows each step: the model's reasoning, the tool it chose and with what arguments, the policy
+decision and outcome of every action, and exactly what each tool returned to the model. The model's reasoning appears
+when its route sets `reasoning_body` (for OpenRouter, `{reasoning: {max_tokens: 1024}}`); General sends the model's
+reasoning blocks back with tool results so it keeps its train of thought. Other workflows never send these fields,
+and changing `reasoning_body` does not require new route probes.
+
 ## Browser engines
 
 `/browse` runs on the built-in step loop (one model-chosen action at a time, each checked by the policy gate)
@@ -96,7 +111,7 @@ which navigates real websites more reliably. Its model calls still go through th
 
 ## Owner commands (Telegram)
 
-`/research <topic>` · `/video <url> [question]` · `/browse <goal>` · `/office <goal>` · `/tasks` ·
+`/general <message>` · `/research <topic>` · `/video <url> [question]` · `/browse <goal>` · `/office <goal>` · `/tasks` ·
 `/status <id>` · `/pause <id|all>` · `/resume <id> [+budget]` · `/cancel <id>` · `/steer <id> <text>` ·
 `/answer <id> <text>` · `/budget` · `/schedules` · `/schedule add|pause|resume|run` · `/prefs`.
 Approvals arrive with **Approve once / Deny** buttons. With OpenClaw, `/status`, `/pause`, `/resume`,

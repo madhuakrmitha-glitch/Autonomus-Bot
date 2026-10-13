@@ -34,6 +34,7 @@ from .contracts import (
     PolicyVerdict,
     ReceiptError,
     ReceiptStatus,
+    TaskRequest,
     TaskStatus,
     WorkerJob,
 )
@@ -271,7 +272,10 @@ class TaskContext:
     # -- model calls ----------------------------------------------------------------------------------
     async def model(self, role: str, messages: list[dict[str, Any]], *, key: str, images: list[ImageInput] | None = None,
                     tools: list[dict[str, Any]] | None = None, tool_choice: Any = None,
-                    max_output_tokens: int | None = None, temperature: float | None = 0.2) -> ModelResponse:
+                    max_output_tokens: int | None = None, temperature: float | None = 0.2,
+                    reasoning: bool = False) -> ModelResponse:
+        """A journaled model call; ``reasoning`` adds the route's reasoning fields (its thinking shows in the trace)."""
+
         async def run() -> dict[str, Any]:
             # the live activity trace in the UI is built from these events; replayed (journaled) calls emit nothing
             self.c.tasks.event(self.task.id, "model_start", {"key": key, "role": role, "images": len(images or []),
@@ -281,6 +285,7 @@ class TaskContext:
                     role, messages, images=images, tools=tools, tool_choice=tool_choice,
                     max_output_tokens=max_output_tokens, temperature=temperature, task_id=self.task.id,
                     task_ceiling=self.task_ceiling(), purpose=role, caller=f"task:{self.task.workflow}",
+                    reasoning=reasoning,
                 )
             except BaseException as exc:
                 self.c.tasks.event(self.task.id, "model_error", {"key": key, "role": role,
@@ -326,6 +331,40 @@ class TaskContext:
             return {"answer": answer}
 
         return (await self.step(f"ask:{key}", run))["answer"]
+
+    # -- delegation ------------------------------------------------------------------------------------
+    async def subtask(self, workflow: str, goal: str, *, key: str, params: dict[str, Any] | None = None) -> TaskRecord:
+        """Run another workflow as a child task in this task's chat; wait until it ends, blocks or pauses.
+
+        The child is created once (journaled) and started at once: this task already holds a slot, so
+        the child must not queue behind it. Cancelling this task cancels the child; pausing leaves it.
+        """
+        async def create() -> dict[str, Any]:
+            parent = self.task.request
+            req = TaskRequest(goal=goal[:8000], workflow=workflow,  # type: ignore[arg-type]
+                              params={**(params or {}), "parent_task_id": self.task.id},
+                              constraints=list(parent.constraints), worker_id=parent.worker_id,
+                              conversation_id=parent.conversation_id)
+            child = self.c.submit_task(req, origin="subtask", notify=False)
+            return {"task_id": child.id}
+
+        child_id = (await self.step(f"subtask:{key}", create))["task_id"]
+        self.progress(f"handed off to {workflow.replace('_', ' ')} #{child_id[-6:]}", phase="delegate")
+        self.c.engine.start(child_id)
+
+        async def settled() -> TaskRecord:
+            while True:
+                t = self.c.tasks.require(child_id)
+                if t.terminal or t.status in (S.BLOCKED, S.PAUSED):
+                    return t
+                await asyncio.sleep(0.5 if self.config.testing else 2.0)
+
+        try:
+            return await self._wait(settled())
+        except TaskInterrupted as exc:
+            if exc.kind == "cancel":
+                self.c.cancel_task(child_id)
+            raise
 
     # -- leases ----------------------------------------------------------------------------------------
     def _lease(self, worker_id: str, resource: str):

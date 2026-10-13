@@ -48,7 +48,11 @@ WORKFLOW_RESULTS = {
     "video_analysis": "timestamped video findings (frames + transcript) in a Word report",
     "browser_task": "the requested browser outcome, verified on the page, with a short summary",
     "desktop_workflow": "the requested office/desktop outcome through a bounded adapter",
+    "general_workflow": "a chat reply, using web search, documents, research or the browser when needed",
 }
+
+# chat-style workflows: the reply itself is the result, so they get no acknowledgement or completion echo
+CONVERSATIONAL = {"chat_workflow", "general_workflow"}
 
 UPLOAD_KIND = {"screenshot": "observation", "frame": "media", "image": "evidence", "download": "input",
                "media": "media", "subtitles": "media", "draft": "output", "workbook": "output"}
@@ -65,7 +69,7 @@ def classify_workflow(goal: str) -> str:
         return "desktop_workflow"
     if BROWSE_HINT.search(goal.strip()):
         return "browser_task"
-    return "chat_workflow"
+    return "general_workflow"
 
 
 class Coordinator:
@@ -244,7 +248,7 @@ class Coordinator:
         }
         task = self.tasks.create(request, owner=self.owner_key, workflow=workflow, limits=limits, origin=origin,
                                  dedup_key=dedup_key, schedule_run_id=schedule_run_id)
-        if notify:
+        if notify and workflow not in CONVERSATIONAL:
             extra = f"\nMissing input: {missing}" if missing else ""
             msg = (f"Task {task.id[-6:]} accepted ({workflow.replace('_', ' ')}).\n"
                    f"Intended result: {WORKFLOW_RESULTS.get(workflow, 'a verified result')}.{extra}\n"
@@ -540,6 +544,8 @@ class Coordinator:
             # running is reported through progress; approvals send their own message
             self.tasks.update(t.id, last_progress_at=now_iso())
             return
+        if t.status == S.VERIFYING and t.workflow in CONVERSATIONAL:
+            return  # a chat reply has nothing to verify beyond its delivery
         label = {S.AWAITING_USER: "is waiting for your input", S.BLOCKED: "is blocked", S.VERIFYING: "is verifying its results",
                  S.PAUSED: "is paused", S.QUEUED: "is queued"}.get(t.status, t.status.value.lower())
         self.notifier.text(f"Task {t.id[-6:]} {label}{': ' + reason if reason else '.'}", task_id=t.id,
@@ -547,6 +553,8 @@ class Coordinator:
         self.tasks.update(t.id, last_progress_at=now_iso())
 
     def on_finished(self, t: TaskRecord) -> None:
+        if t.workflow in CONVERSATIONAL and t.status == S.COMPLETED:
+            return  # the reply was the delivery
         res = t.result or {}
         lines = [f"Task {t.id[-6:]} {t.status.value.lower()}.", truncate(res.get("summary") or "", 1500)]
         lims = res.get("limitations") or []
