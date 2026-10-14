@@ -94,6 +94,26 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
+  // Refreshing the UI must not rebuild what has not changed: a rebuilt node replays its animations, drops focus and scroll,
+  // and shows as a flicker. These two helpers let the render functions touch only the parts that differ.
+  // Make `parent`'s children exactly `nodes`, in order. Nodes already in place are left alone.
+  function reconcile(parent, nodes) {
+    const want = new Set(nodes);
+    for (const c of [...parent.childNodes]) if (!want.has(c)) c.remove();
+    nodes.forEach((n, i) => { const cur = parent.childNodes[i]; if (cur !== n) parent.insertBefore(n, cur || null); });
+  }
+  // Reuse an element built earlier while its signature (everything it displays) is unchanged.
+  function memoEl(cache, key, sig, build) {
+    const hit = cache.get(key);
+    if (hit && hit.sig === sig) return hit.el;
+    const el = build(); cache.set(key, { sig, el }); return el;
+  }
+  // Fade a brand-new message in once; it is not replayed when the element is later moved or re-attached.
+  function enter(el) {
+    el.classList.add("enter");
+    el.addEventListener("animationend", (e) => { if (e.target === el) el.classList.remove("enter"); });
+  }
+
   function relTime(iso) {
     const d = new Date(iso); if (isNaN(d)) return "";
     const s = (Date.now() - d.getTime()) / 1000;
@@ -272,7 +292,7 @@
 
   // ---------------------------------------------------------------------------------------- feed
   const feed = $("feed");
-  let inner = h("div", { class: "feed-inner" });
+  const inner = h("div", { class: "feed-inner" });
   feed.appendChild(inner);
 
   function isApproval(m) { return (m.buttons || []).flat().some((b) => /^omca:apr:/.test(b[1])); }
@@ -698,6 +718,7 @@
       card.appendChild(list);
     }
     const el = h("div", { class: "msg assistant trace-msg", dataset: { key: sig } }, h("div", { class: "avatar logo" }), h("div", { class: "bubble" }, card));
+    if (!cached) enter(el);  // only the first card of a task fades in, not each update to it
     S.traceEls.set(t.task_id, el); return el;
   }
 
@@ -752,28 +773,37 @@
   }
   const feedSoon = debounce(() => { if (!S.firstLoad) { renderFeed(); renderTasks(); } }, 120);
 
+  // The feed is updated in place: only new, changed or removed messages touch the DOM; the rest stay exactly as they are.
+  const feedBits = new Map();
   function renderFeed({ scroll = false } = {}) {
     const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 120;
     const msgs = visibleMessages();
-    const next = h("div", { class: "feed-inner" });
-    if (!msgs.length) next.appendChild(welcome());
+    const nodes = [];
+    if (!msgs.length) nodes.push(memoEl(feedBits, "welcome", [greeting(), S.info && S.info.search_adapter, S.info && S.info.browser_authorized].join("|"), welcome));
     let lastDay = null, prev = null;
     const slots = traceSlots(msgs);
-    const putTraces = (tasks) => { for (const t of tasks || []) { const el = traceCard(t); if (el) { next.appendChild(el); prev = null; } } };
+    const putTraces = (tasks) => { for (const t of tasks || []) { const el = traceCard(t); if (el) { nodes.push(el); prev = null; } } };
     for (const m of msgs) {
       const day = new Date(m.created_at).toDateString();
-      if (day !== lastDay) { next.appendChild(h("div", { class: "day" }, dayLabel(m.created_at))); lastDay = day; prev = null; }
+      if (day !== lastDay) {
+        const label = dayLabel(m.created_at);
+        nodes.push(memoEl(feedBits, `day:${day}`, label, () => h("div", { class: "day" }, label))); lastDay = day; prev = null;
+      }
       const key = `${m.id}:${m.rev}`;
       let el = S.els.get(m.id);
-      if (!el || el.dataset.key !== key) { el = renderMessage(m); el.dataset.key = key; S.els.set(m.id, el); }
+      if (!el || el.dataset.key !== key) {
+        const isNew = !el;
+        el = renderMessage(m); el.dataset.key = key; S.els.set(m.id, el);
+        if (isNew) enter(el);
+      }
       const cont = prev && prev.role === m.role && m.role === "assistant" && (new Date(m.created_at) - new Date(prev.created_at)) < 120000;
       el.classList.toggle("cont", !!cont);
       putTraces(slots.before.get(m.id));
-      next.appendChild(el); prev = m;
+      nodes.push(el); prev = m;
       putTraces(slots.after.get(m.id));
     }
     putTraces(slots.tail);
-    feed.replaceChild(next, inner); inner = next;
+    reconcile(inner, nodes);
     if (scroll || atBottom || S.firstLoad) {
       feed.scrollTop = feed.scrollHeight; $("jump").hidden = true;
       requestAnimationFrame(() => { feed.scrollTop = feed.scrollHeight; });  // after images and fonts settle
@@ -833,12 +863,16 @@
   async function refreshTasks() {
     try {
       const tasks = await getJSON("/tasks?limit=100");
-      S.tasks = tasks; S.taskMap = new Map(tasks.map((t) => [t.task_id, t]));
-      if (S.replyTo && !ACTIVE.has(S.taskMap.get(S.replyTo)?.status)) setReply(null);
-      else if (S.replyTo) setReply(S.replyTo);  // status may have changed between steering and answering
-      renderTasks(); renderTop();
+      const sig = JSON.stringify(tasks);
+      if (sig !== S.tasksSig) {  // most polls find nothing new, and then nothing is redrawn
+        S.tasksSig = sig;
+        S.tasks = tasks; S.taskMap = new Map(tasks.map((t) => [t.task_id, t]));
+        if (S.replyTo && !ACTIVE.has(S.taskMap.get(S.replyTo)?.status)) setReply(null);
+        else if (S.replyTo) setReply(S.replyTo);  // status may have changed between steering and answering
+        renderTasks(); renderTop();
+        if (!S.firstLoad) renderFeed();
+      }
       if (S.selected) loadDetail(S.selected);
-      if (!S.firstLoad) renderFeed();
     } catch { /* connection state is shown by the poll loop */ }
   }
   const refreshTasksSoon = debounce(refreshTasks, 300);
@@ -853,8 +887,10 @@
   }
   const cur = (c) => ({ INR: "₹", USD: "$", EUR: "€", GBP: "£" }[c] || (c ? c + " " : ""));
 
+  // The sidebar is updated in place too: a chat's row is rebuilt only when something it shows has changed.
+  const sideBits = new Map();
   function renderTasks() {
-    const list = $("taskList"); list.replaceChildren();
+    const list = $("taskList"); const nodes = [];
     const q = S.query.trim().toLowerCase();
     const convs = conversations();
     const items = convs.filter((c) => {
@@ -864,12 +900,13 @@
     });
     const draft = !convs.some((c) => c.key === S.conv) && S.filter !== "done" && !q;
     if (draft) {
-      list.appendChild(h("button", { class: "task-item selected", onclick: () => $("app").classList.remove("sidebar-open") },
+      nodes.push(memoEl(sideBits, "draft", "", () => h("button", { class: "task-item selected", onclick: () => $("app").classList.remove("sidebar-open") },
         h("span", { class: "wf" }, icon("message-square")), h("span", { class: "goal" }, "New chat"), h("span", { class: "when" }),
-        h("span", { class: "meta" }, "Nothing sent yet")));
+        h("span", { class: "meta" }, "Nothing sent yet"))));
     }
     if (!items.length) {
-      if (!draft) list.appendChild(h("div", { class: "task-empty" }, convs.length ? "No matching chats" : "No chats yet. Start one below."));
+      if (!draft) nodes.push(memoEl(sideBits, "empty", String(convs.length), () => h("div", { class: "task-empty" }, convs.length ? "No matching chats" : "No chats yet. Start one below.")));
+      reconcile(list, nodes);
       return;
     }
     const needs = items.filter((c) => c.needs);
@@ -879,25 +916,33 @@
       ["Earlier", rest.filter((c) => new Date(c.latest.created_at).toDateString() !== today)]];
     for (const [label, cs] of groups) {
       if (!cs.length) continue;
-      list.appendChild(h("div", { class: "group-label" }, label));
+      nodes.push(memoEl(sideBits, `g:${label}`, "", () => h("div", { class: "group-label" }, label)));
       for (const c of cs) {
         const [wlabel, wicon] = wf(c.workflow); const [slabel, scls] = STATUS[c.status] || [c.status, ""];
-        list.appendChild(h("button", { class: `task-item ${S.conv === c.key ? "selected" : ""} ${S.unreadConv.has(c.key) ? "unread" : ""}`,
+        const doing = WORKING.has(c.status) ? " · " + (activityLine(c.tasks.find((t) => WORKING.has(t.status)).task_id) || "") : null;
+        const when = relTime(c.updated_at);
+        const sig = [c.title, c.status, c.workflow, c.tasks.length, when, S.conv === c.key, S.unreadConv.has(c.key), doing].join("\u0001");
+        nodes.push(memoEl(sideBits, `c:${c.key}`, sig, () => h("button", { class: `task-item ${S.conv === c.key ? "selected" : ""} ${S.unreadConv.has(c.key) ? "unread" : ""}`,
           onclick: () => openConv(c.key), title: c.title },
           h("span", { class: "wf" }, icon(wicon)),
           h("span", { class: "goal" }, c.title),
-          h("span", { class: "when" }, relTime(c.updated_at)),
+          h("span", { class: "when" }, when),
           h("span", { class: "meta" }, h("span", { class: `dot ${scls}` }), slabel, " · ", wlabel,
             c.tasks.length > 1 ? ` · ${c.tasks.length} requests` : "",
-            WORKING.has(c.status) ? h("span", { class: "doing" }, " · " + (activityLine(c.tasks.find((t) => WORKING.has(t.status)).task_id) || "")) : null)));
+            doing != null ? h("span", { class: "doing" }, doing) : null))));
       }
     }
+    reconcile(list, nodes);
   }
 
+  let topSig = null;
   function renderTop() {
-    const top = $("topTitle"); top.replaceChildren();
+    const top = $("topTitle");
     const c = getConv();
     $("inspectorBtn").hidden = !(c && c.work);
+    const sig = c ? [c.title, c.status, c.workflow, c.tasks.length, c.latest.task_id].join("\u0001") : "";
+    if (sig === topSig) return;
+    topSig = sig; top.replaceChildren();
     if (!c) { top.append(h("h1", {}, "New chat"), h("span", { class: "sub" }, "A fresh conversation with its own context")); return; }
     top.append(h("h1", { title: c.title }, c.title),
       h("span", { class: "sub" }, pill(c.status), `${wf(c.workflow)[0]}${c.tasks.length > 1 ? ` · ${c.tasks.length} requests` : ` · #${short(c.latest.task_id)}`}`));
@@ -943,7 +988,9 @@
     try {
       const d = await getJSON(`/ui/api/tasks/${encodeURIComponent(id)}`);
       if (S.selected !== id) return;
-      S.detail = d; if (!$("inspector").hidden) renderInspector();
+      const sig = JSON.stringify(d);
+      if (S.detail && sig === S.detailSig) return;  // unchanged since the last poll: leave the pane alone
+      S.detail = d; S.detailSig = sig; if (!$("inspector").hidden) renderInspector();
     } catch { /* keep the old view */ }
   }
   function stepsFor(d) {
@@ -964,6 +1011,12 @@
     const d = S.detail; const ins = $("inspector"); if (!d) return;
     const [wlabel, wicon] = wf(d.workflow);
     const res = d.result || {}; const det = res.details || {};
+    // When the same task's details change, keep what the user is in the middle of: scroll position and a half-typed answer.
+    const sameTask = ins.dataset.task === d.task_id;
+    const prevInput = sameTask ? ins.querySelector(".inline-form input") : null;
+    const keep = prevInput && { v: prevInput.value, focus: document.activeElement === prevInput, s: prevInput.selectionStart, e: prevInput.selectionEnd };
+    const scrollTop = sameTask ? ins.scrollTop : 0;
+    ins.dataset.task = d.task_id;
     ins.replaceChildren();
     ins.appendChild(h("div", { class: "insp-head" },
       h("div", { class: "t" }, h("div", { class: "ids" }, icon(wicon), `${wlabel} · #${short(d.task_id)}`, pill(d.status)), h("h2", {}, d.goal)),
@@ -1033,6 +1086,12 @@
     if (det.steps != null) fact("Steps", String(det.steps));
     fact("Worker", d.worker_id); fact("Task id", h("code", {}, d.task_id));
     ins.appendChild(h("div", { class: "insp-section" }, h("h3", {}, "Details"), facts));
+    ins.scrollTop = scrollTop;
+    const next = keep && ins.querySelector(".inline-form input");
+    if (next) {
+      next.value = keep.v;
+      if (keep.focus) { next.focus(); try { next.setSelectionRange(keep.s, keep.e); } catch { /* not a text input */ } }
+    }
   }
   async function taskAction(id, action) {
     try { await postJSON(`/tasks/${id}/${action}`); toast(`Task ${action === "resume" ? "resumed" : action === "pause" ? "paused" : "cancelled"}`); refreshTasks(); }

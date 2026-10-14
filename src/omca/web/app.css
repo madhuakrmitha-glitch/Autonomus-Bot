@@ -171,7 +171,8 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .feed-inner { max-width: 780px; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; gap: 4px; }
 .day { align-self: center; font-size: 11.5px; font-weight: 600; color: var(--text-3); padding: 14px 0 6px; letter-spacing: .02em; }
 
-.msg { display: flex; gap: 10px; align-items: flex-start; animation: rise .22s ease-out; }
+.msg { display: flex; gap: 10px; align-items: flex-start; }
+.msg.enter { animation: rise .22s ease-out; }
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
 .msg.owner { justify-content: flex-end; margin-top: 10px; }
 .msg.assistant { margin-top: 10px; }
